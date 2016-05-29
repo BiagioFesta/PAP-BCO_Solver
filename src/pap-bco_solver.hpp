@@ -52,6 +52,9 @@ class PAP_BCO_Solver {
 
   ///! \brief Parse the m_graph reading the input file.
   void parse_matrix_fromfile();
+
+  ///! \brief Prints a briefly help guide on the std output.
+  void print_help() const noexcept;
 };
 
 }  // namespace pap_solver

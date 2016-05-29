@@ -27,6 +27,7 @@ namespace pap_solver {
 struct ProgramOptions {
   std::string input_matrix_filename;
   bool compressed_matrix = false;
+  bool display_help = false;
 };
 }
 

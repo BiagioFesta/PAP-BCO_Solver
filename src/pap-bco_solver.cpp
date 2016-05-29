@@ -52,12 +52,13 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
   static struct option long_options[] = {
     {"file", required_argument, 0, 'f'},
     {"compressed", no_argument, 0, 'c'},
+    {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}
   };
   int option_index;
   while (true) {
     option_index = 0;
-    auto c = getopt_long(argc, argv, "cf:", long_options, &option_index);
+    auto c = getopt_long(argc, argv, "hcf:", long_options, &option_index);
     if (c == -1) break;
     switch (c) {
       case 'f':
@@ -66,6 +67,9 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
       case 'c':
         m_options.compressed_matrix = true;
         break;
+      case 'h':
+        m_options.display_help = true;
+        break;
       case '?':
         return -1;
       default:
@@ -73,7 +77,8 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
         return -1;
     }
   }
-  if (m_options.input_matrix_filename.size() == 0) {
+  if (m_options.display_help == false &&
+      m_options.input_matrix_filename.size() == 0) {
     std::cerr << "You must specify an input file with the option: \n"
         "      -f FILENAME \n";
     return -1;
@@ -82,6 +87,11 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
 }
 
 void PAP_BCO_Solver::run() {
+  if (m_options.display_help == true) {
+    print_help();
+    return;
+  }
+
   parse_matrix_fromfile();
   MatrixParser parser;
   parser.print_graph_humanreadable(&m_graph, &std::cout);
@@ -110,6 +120,16 @@ void PAP_BCO_Solver::parse_matrix_fromfile() {
     }
   }
   file.close();
+}
+
+void PAP_BCO_Solver::print_help() const noexcept {
+  std::cout <<
+      R"##(
+   PAP-BCO Solver
+-f, --file FILENAME     : The input matrix to load.
+-c, --compresed         : Specify whether the input matrix is a compressed format or not.
+
+)##";
 }
 
 }  // namespace pap_solver
