@@ -8,6 +8,10 @@ SET( ${PROJECT_NAME}_MAJOR_VERSION 0 )
 SET( ${PROJECT_NAME}_MINOR_VERSION 0 )
 SET( ${PROJECT_NAME}_PATCH_LEVEL 1 )
 
+find_package(Boost COMPONENTS graph)
+link_directories(${Boost_LIBRARY_DIRS})
+include_directories(BEFORE ${Boost_INCLUDE_DIRS})
+
 add_executable(${PROJECT_NAME} "./src/pap-bco_solver.cpp")
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU"   OR   "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
