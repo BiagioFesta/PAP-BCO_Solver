@@ -22,6 +22,7 @@
 #define __PAP_BCO_SOLVER__MATRIX_PARSER__HPP
 
 #include <istream>
+#include <ostream>
 
 namespace pap_solver {
 
@@ -57,6 +58,18 @@ class MatrixParser {
   template<typename Graph,
            typename AddEdge>
   void parse_full_matrix(std::istream* is, Graph* g, AddEdge add_edge);
+
+
+  /// @brief Generate a random compressed matrix
+  ///
+  /// @param [in] rnd_engine     A valid random engine.
+  /// @param [in] matrix_size    The size of the matrix.
+  /// @param [out] os            An output stream where the matrix
+  ///                            will be written.
+  template<typename RND>
+  void generate_rnd_compressed_matrix(RND* rnd_engine,
+                                      size_t matrix_size,
+                                      std::ostream* os);
 
   template<typename Graph>
   void print_graph_humanreadable(Graph* g, std::ostream* os);

@@ -21,6 +21,7 @@
 #include <string>
 #include <stdexcept>
 #include <memory>
+#include <random>
 #include <boost/graph/adjacency_list.hpp>
 #include "matrix_parser.hpp"
 
@@ -130,6 +131,36 @@ void MatrixParser::print_graph_humanreadable(Graph* g,
       *os << *i << "  ->  " << *j << '\n';
     }
   }
+}
+
+template<typename RND>
+void MatrixParser::generate_rnd_compressed_matrix(RND* rnd_engine,
+                                                  size_t matrix_size,
+                                                  std::ostream* os) {
+  // 48 and 49 are '0' and '1' in the ASCII codec
+  std::uniform_int_distribution<> rnd_value(48, 49);
+
+  auto tbuffer = std::get_temporary_buffer<char>(matrix_size);
+  if (tbuffer.first == nullptr) {
+    throw std::runtime_error("I cannot generate random matrix, "
+                             "bad memory allocation");
+  }
+  size_t i;
+  size_t row_size = matrix_size - 1;
+  while (row_size) {
+    for (i = 0; i < row_size; ++i) {
+      tbuffer.first[i] = rnd_value(*rnd_engine);
+    }
+    // We cannot have a vertex without outgoing edge
+    if (std::memchr(tbuffer.first, '1', row_size) == nullptr) {
+      // We have a row with all zeros. Just change on of them!
+      tbuffer.first[0] = '1';
+    }
+    os->write(tbuffer.first, row_size);
+    os->put('\n');
+    --row_size;
+  }
+  std::return_temporary_buffer(tbuffer.first);
 }
 
 }  // namespace pap_solver

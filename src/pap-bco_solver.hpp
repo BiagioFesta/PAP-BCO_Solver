@@ -55,6 +55,9 @@ class PAP_BCO_Solver {
 
   ///! \brief Prints a briefly help guide on the std output.
   void print_help() const noexcept;
+
+  /// @brief It prints a briefly header on the std output.
+  void print_header() const noexcept;
 };
 
 }  // namespace pap_solver
