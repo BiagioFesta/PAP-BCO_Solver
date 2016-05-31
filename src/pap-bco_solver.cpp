@@ -315,43 +315,7 @@ bool PAP_BCO_Solver::is_odd_cotree_edge(const Graph::edge_descriptor& e,
   const auto num_vertices = boost::num_vertices(m_graph);
   boost::two_bit_color_map<> color_map(num_vertices);
   auto node = st.getMap().cbegin()->first;
-  decltype(node) parent_node;
-  // TODO(biagio): cosa succede se il tree è vuoto?
 
-  static const auto color_gray =
-      boost::color_traits<boost::two_bit_color_type>::gray();
-  size_t depth = 0;
-  bool found_child;
-  while (depth < num_vertices) {
-    // Make this node gray (explored)
-    boost::put(color_map, node, color_gray);
-
-    // Get iterator of outgoing edges
-    auto childs = boost::out_edges(node, m_graph);
-    found_child = false;
-    for (auto i = childs.first;
-         i != childs.second && found_child == false;
-         ++i) {
-      // A loop on each edges. Check whether is in the tree
-      // or is the co-tree edge itself.
-      if (m_graph[*i].m_intree == true || *i == e) {
-        auto target = boost::target(*i, m_graph);
-        if (boost::get(color_map, target) != color_gray) {
-          parent_node = node;
-          node = target;
-          found_child = true;
-        } else {
-          if (target != parent_node) {
-            // Found a loop!
-            return depth % 2 == 0 ? true : false;
-          }
-        }
-      }
-    }
-    ++depth;
-  }
-  // TODO(biagio): not found a loop! Something could be gone wrong.
-  return false;
 }
 
 }  // namespace pap_solver
