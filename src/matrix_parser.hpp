@@ -23,6 +23,7 @@
 
 #include <istream>
 #include <ostream>
+#include <string>
 
 namespace pap_solver {
 
@@ -44,7 +45,9 @@ class MatrixParser {
   ///                       Concept:    void (&)(VertexType, VertexType, Graph)
   template<typename Graph,
            typename AddEdge>
-  void parse_compressed_matrix(std::istream* is, Graph* g, AddEdge add_edge);
+  void parse_compressed_matrix(std::istream* is,
+                               Graph* g,
+                               AddEdge add_edge) const;
 
   /// \brief It prarses a full matrix (not compressed) and filles the relative
   ///        graph
@@ -57,7 +60,9 @@ class MatrixParser {
   /// \see                 MatrxiParser::parse_compressed_matrix.
   template<typename Graph,
            typename AddEdge>
-  void parse_full_matrix(std::istream* is, Graph* g, AddEdge add_edge);
+  void parse_full_matrix(std::istream* is,
+                         Graph* g,
+                         AddEdge add_edge) const;
 
 
   /// @brief Generate a random compressed matrix
@@ -69,7 +74,7 @@ class MatrixParser {
   template<typename RND>
   void generate_rnd_compressed_matrix(RND* rnd_engine,
                                       size_t matrix_size,
-                                      std::ostream* os);
+                                      std::ostream* os) const;
 };
 
 
@@ -79,7 +84,7 @@ template<typename Graph,
          typename AddEdge>
 void MatrixParser::parse_compressed_matrix(std::istream* is,
                                            Graph* g,
-                                           AddEdge add_edge) {
+                                           AddEdge add_edge) const {
   // TODO(biagio): you should check whether the graph is empty or not.
   std::string sstream((std::istreambuf_iterator<char>(*is)),
                       std::istreambuf_iterator<char>());
@@ -115,7 +120,7 @@ template<typename Graph,
          typename AddEdge>
 void MatrixParser::parse_full_matrix(std::istream* is,
                                      Graph* g,
-                                     AddEdge add_edge) {
+                                     AddEdge add_edge) const {
   static constexpr size_t SIZE_TEMP_BUFFER = 1024;
   auto tbuffer = std::get_temporary_buffer<char>(SIZE_TEMP_BUFFER);
   if (tbuffer.second != SIZE_TEMP_BUFFER) {
@@ -171,7 +176,7 @@ void MatrixParser::parse_full_matrix(std::istream* is,
 template<typename RND>
 void MatrixParser::generate_rnd_compressed_matrix(RND* rnd_engine,
                                                   size_t matrix_size,
-                                                  std::ostream* os) {
+                                                  std::ostream* os) const {
   // 48 and 49 are '0' and '1' in the ASCII codec
   std::uniform_int_distribution<> rnd_value(48, 49);
 

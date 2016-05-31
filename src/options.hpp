@@ -25,10 +25,11 @@
 
 namespace pap_solver {
 struct ProgramOptions {
-  std::string input_matrix_filename;
+  std::string input_filename;
   bool compressed_matrix = false;
   bool display_help = false;
-  bool debug = false;
+  bool generate_random_matrix = false;
+  size_t size_generation_matrix = 0;
 };
 }
 

@@ -28,7 +28,6 @@
 #include <boost/graph/graph_utility.hpp>
 #include <boost/graph/bipartite.hpp>
 #include "pap-bco_solver.hpp"
-#include "matrix_parser.hpp"
 
 int main(int argc, char *argv[]) {
   try {
@@ -54,22 +53,27 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
     {"file", required_argument, 0, 'f'},
     {"compressed", no_argument, 0, 'c'},
     {"help", no_argument, 0, 'h'},
+    {"generate", required_argument, 0, 'g'},
     {0, 0, 0, 0}
   };
   int option_index;
   while (true) {
     option_index = 0;
-    auto c = getopt_long(argc, argv, "hcf:", long_options, &option_index);
+    auto c = getopt_long(argc, argv, "g:hcf:", long_options, &option_index);
     if (c == -1) break;
     switch (c) {
       case 'f':
-        m_options.input_matrix_filename = optarg;
+        m_options.input_filename = optarg;
         break;
       case 'c':
         m_options.compressed_matrix = true;
         break;
       case 'h':
         m_options.display_help = true;
+        break;
+      case 'g':
+        m_options.generate_random_matrix = true;
+        m_options.size_generation_matrix = std::stoi(optarg);
         break;
       case '?':
         return -1;
@@ -79,8 +83,8 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
     }
   }
   if (m_options.display_help == false &&
-      m_options.debug == false &&
-      m_options.input_matrix_filename.size() == 0) {
+      m_options.generate_random_matrix == false &&
+      m_options.input_filename.size() == 0) {
     std::cerr << "You must specify an input file with the option: \n"
         "      -f FILENAME \n";
     return -1;
@@ -103,40 +107,41 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
     return;
   }
 
-  parse_matrix_fromfile();
-
   // std::default_random_engine rnd_eng(std::time(nullptr));
   std::default_random_engine rnd_eng(0);
+
+  if (m_options.generate_random_matrix == true) {
+    generate_random_matrix(&rnd_eng);
+    return;
+  }
+
+  parse_matrix_fromfile();
+
   SpanningTree<Graph> spanning_tree;
   spanning_tree.makeRandom_fromGraph(m_graph, &rnd_eng);
   spanning_tree.print(&std::cout);
   assign_edges_property_byTree(spanning_tree);
   algorithm_assign_port_byTree(spanning_tree);
   print_all_vertices_and_ports(&std::cout);
-
-
-  // DEBUG.... TESTING...BLABLABLA
-  
 }
 
 void PAP_BCO_Solver::parse_matrix_fromfile() {
-  MatrixParser parser;
   std::ifstream file;
-  file.open(m_options.input_matrix_filename);
+  file.open(m_options.input_filename);
   if (file.fail() == true) {
     throw std::invalid_argument("The file '" +
-                                m_options.input_matrix_filename +
+                                m_options.input_filename +
                                 "' cannot be read.");
   }
   if (m_options.compressed_matrix == true) {
-    parser.parse_compressed_matrix(&file, &m_graph, [](size_t v1,
+    m_mat_parser.parse_compressed_matrix(&file, &m_graph, [](size_t v1,
                                                        size_t v2,
                                                        Graph* g) {
                                      boost::add_edge(v1, v2, *g);
                                    });
   } else {
     try {
-      parser.parse_full_matrix(&file, &m_graph, [](size_t v1,
+      m_mat_parser.parse_full_matrix(&file, &m_graph, [](size_t v1,
                                                    size_t v2,
                                                    Graph* g) {
                                  boost::add_edge(v1, v2, *g);
@@ -150,6 +155,22 @@ void PAP_BCO_Solver::parse_matrix_fromfile() {
     }
   }
   file.close();
+}
+
+template<typename RND>
+void PAP_BCO_Solver::generate_random_matrix(RND* rnd_engine) const {
+  std::ostream* os = &std::cout;
+  std::ofstream file;
+  if (m_options.input_filename.size() != 0) {
+    file.open(m_options.input_filename);
+    os = &file;
+  }
+  m_mat_parser.generate_rnd_compressed_matrix(rnd_engine,
+                                              m_options.size_generation_matrix,
+                                              os);
+  if (m_options.input_filename.size() != 0) {
+    file.close();
+  }
 }
 
 void PAP_BCO_Solver::print_help() const noexcept {

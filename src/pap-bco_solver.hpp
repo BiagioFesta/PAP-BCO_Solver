@@ -25,6 +25,7 @@
 #include <boost/graph/adjacency_list.hpp>
 #include "options.hpp"
 #include "spanning_tree.hpp"
+#include "matrix_parser.hpp"
 
 namespace pap_solver {
 
@@ -40,6 +41,8 @@ class PAP_BCO_Solver {
     } m_port = Port::UnAssigned;
     bool m_inCoverSet = false;
   };
+
+  /// Properties for a edge.
   struct EdgeProperties {
     bool m_intree = false;
     bool m_odd = false;
@@ -59,12 +62,19 @@ class PAP_BCO_Solver {
  private:
   ProgramOptions m_options;
   Graph m_graph;
+  MatrixParser m_mat_parser;
 
   /// @brief Parse the program option through the command line.
   int parse_cmdline_options(int argc, char* argv[]);
 
   /// @brief Parse the m_graph reading the input file.
   void parse_matrix_fromfile();
+
+  /// @brief Generate a random matrix and prints it
+  ///        on the std output or on the file if it has been
+  ///        specified in the options.
+  template<typename RND>
+  void generate_random_matrix(RND* rnd_engine) const;
 
   /// @brief Prints a briefly help guide on the std output.
   void print_help() const noexcept;
