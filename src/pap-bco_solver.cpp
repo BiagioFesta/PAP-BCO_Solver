@@ -23,7 +23,7 @@
 #include <stdexcept>
 #include <string>
 #include <ctime>
-#include <vector>
+#include <queue>
 #include <boost/graph/filtered_graph.hpp>
 #include <boost/graph/graph_utility.hpp>
 #include <boost/graph/bipartite.hpp>
@@ -308,14 +308,55 @@ void PAP_BCO_Solver::assign_edges_property_byTree(
 
 bool PAP_BCO_Solver::is_odd_cotree_edge(const Graph::edge_descriptor& e,
                                         const SpanningTree<Graph>& st) const {
+  typedef boost::two_bit_color_map<> color_map_t;
+  typedef std::queue<Graph::vertex_descriptor> open_list_t;
+  static const auto white_t =  boost::color_traits<
+    boost::two_bit_color_type>::white();
+  static const auto black_t =  boost::color_traits<
+    boost::two_bit_color_type>::black();
+  static const auto gray_t =  boost::color_traits<
+    boost::two_bit_color_type>::gray();
+
   if (m_graph[e].m_intree == true) {
     std::runtime_error("Cannot verify if an edge is odd when it "
                        "belogs the tree");
   }
   const auto num_vertices = boost::num_vertices(m_graph);
-  boost::two_bit_color_map<> color_map(num_vertices);
-  auto node = st.getMap().cbegin()->first;
+  color_map_t color_map(num_vertices);
 
+  open_list_t openlist;
+  const auto& root = st.getMap().cbegin()->first;
+  openlist.push(root);
+  boost::put(color_map, root, black_t);
+
+  while (openlist.empty() == false) {
+    const auto& node = openlist.front();
+    auto this_node_color = boost::get(color_map, node);
+    for (auto i = boost::out_edges(node, m_graph).first;
+         i != boost::out_edges(node, m_graph).second;
+         ++i) {
+      if (m_graph[*i].m_intree == true || *i == e) {
+        auto target = boost::target(*i, m_graph);
+        auto color_adjacent = boost::get(color_map, target);
+        if (color_adjacent == white_t) {
+          if (this_node_color == black_t)
+            boost::put(color_map, target, gray_t);
+          else
+            boost::put(color_map, target, black_t);
+          openlist.push(target);
+        } else if (color_adjacent == black_t) {
+          if (this_node_color == black_t) return true;
+        } else if (color_adjacent == gray_t) {
+          if (this_node_color == gray_t) return true;
+        } else {
+          // TODO(biagio): verde!?! non dovrebbe run-time error!
+          break;
+        }
+      }
+    }
+    openlist.pop();
+  }
+  return false;
 }
 
 }  // namespace pap_solver
