@@ -39,6 +39,9 @@ class SpanningTree {
   /// A edge type of the graph.
   typedef typename Graph::edge_descriptor EdgeType;
 
+  /// An associative container with <key,value> VertexType.
+  typedef std::map<VertexType, VertexType> Map;
+
   static_assert(std::is_integral<VertexType>::value,
                 "The vertex type (descriptor) must to be a integer type!");
 
@@ -64,10 +67,11 @@ class SpanningTree {
   ///
   void print(std::ostream* os) const;
 
- private:
-  /// An associative container with <key,value> VertexType.
-  typedef std::map<VertexType, VertexType> Map;
+  void clean() noexcept;
 
+  const Map& getMap() const noexcept { return m_data_tree; }
+
+ private:
   Map m_data_tree;
 
   /// A null vertex. The parent of the root will be equal to this.
@@ -80,9 +84,15 @@ SpanningTree<Graph>::SpanningTree() noexcept:
 }
 
 template<typename Graph>
+void SpanningTree<Graph>::clean() noexcept {
+  m_data_tree.clear();
+}
+
+template<typename Graph>
 template<typename RND>
 void SpanningTree<Graph>::makeRandom_fromGraph(const Graph& g,
                                                RND* rnd_engine) {
+  this->clean();
   boost::associative_property_map<Map> predecessor_map(m_data_tree);
   boost::random_spanning_tree(g,
                               *rnd_engine,
@@ -106,6 +116,8 @@ void SpanningTree<Graph>::print(std::ostream* os) const {
     }
   }
 }
+
+
 
 }  // namespace pap_solver
 

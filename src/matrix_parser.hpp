@@ -70,12 +70,134 @@ class MatrixParser {
   void generate_rnd_compressed_matrix(RND* rnd_engine,
                                       size_t matrix_size,
                                       std::ostream* os);
-
-  template<typename Graph>
-  void print_graph_humanreadable(Graph* g, std::ostream* os);
 };
+
+
+
+
+template<typename Graph,
+         typename AddEdge>
+void MatrixParser::parse_compressed_matrix(std::istream* is,
+                                           Graph* g,
+                                           AddEdge add_edge) {
+  // TODO(biagio): you should check whether the graph is empty or not.
+  std::string sstream((std::istreambuf_iterator<char>(*is)),
+                      std::istreambuf_iterator<char>());
+  size_t current_vertex = 0;
+  size_t current_column = 1;
+  size_t prev_lenght_line = 0;
+  for (const auto&c : sstream) {
+    if (prev_lenght_line > 0 && current_column > prev_lenght_line) {
+      throw std::runtime_error("Parsing error, line too long.");
+    }
+    switch (c) {
+      case 48:  // ASCII for 0
+        ++current_column;
+        break;
+      case 49:  // ASCII for 1
+        add_edge(current_vertex, current_column, g);
+        ++current_column;
+        break;
+      case 10:  // ASCII for \n
+        if (prev_lenght_line > 0 && current_column != prev_lenght_line) {
+          throw std::runtime_error("Parsing error, line too short.");
+        }
+        prev_lenght_line = current_column;
+        ++current_vertex;
+        current_column = current_vertex + 1;
+      default:  // Pass away for other any char
+        break;
+    }
+  }
+}
+
+template<typename Graph,
+         typename AddEdge>
+void MatrixParser::parse_full_matrix(std::istream* is,
+                                     Graph* g,
+                                     AddEdge add_edge) {
+  static constexpr size_t SIZE_TEMP_BUFFER = 1024;
+  auto tbuffer = std::get_temporary_buffer<char>(SIZE_TEMP_BUFFER);
+  if (tbuffer.second != SIZE_TEMP_BUFFER) {
+    throw std::runtime_error("Bad memory allocation");
+  }
+
+  size_t current_vertex = 0;
+  size_t current_column = 1;
+  size_t matrix_size = 0;
+  size_t panning = 0;
+
+  while (is->eof() == false) {
+    panning = current_vertex + 1;
+    is->getline(tbuffer.first, tbuffer.second);
+
+    char* i = tbuffer.first;
+    while (*i != 0) {
+      switch (*i) {
+        case 48:  // ASCII for 0
+          if (panning > 0) {
+            --panning;
+          } else {
+            ++current_column;
+          }
+          break;
+        case 49:  // ASCII for 1
+          if (panning > 0) {
+            --panning;
+          } else {
+            add_edge(current_vertex, current_column, g);
+            ++current_column;
+          }
+          break;
+        default:  // Pass away for other any char
+          break;
+      }
+      ++i;
+    }
+    if (matrix_size == 0) {
+      matrix_size = current_column;
+    } else {
+      if (matrix_size != current_column) {
+        throw std::runtime_error("Parsing error");
+      }
+    }
+    ++current_vertex;
+    current_column = current_vertex + 1;
+  }
+
+  std::return_temporary_buffer(tbuffer.first);
+}
+
+template<typename RND>
+void MatrixParser::generate_rnd_compressed_matrix(RND* rnd_engine,
+                                                  size_t matrix_size,
+                                                  std::ostream* os) {
+  // 48 and 49 are '0' and '1' in the ASCII codec
+  std::uniform_int_distribution<> rnd_value(48, 49);
+
+  auto tbuffer = std::get_temporary_buffer<char>(matrix_size);
+  if (tbuffer.first == nullptr) {
+    throw std::runtime_error("I cannot generate random matrix, "
+                             "bad memory allocation");
+  }
+  size_t i;
+  size_t row_size = matrix_size - 1;
+  while (row_size) {
+    for (i = 0; i < row_size; ++i) {
+      tbuffer.first[i] = rnd_value(*rnd_engine);
+    }
+    // We cannot have a vertex without outgoing edge
+    if (std::memchr(tbuffer.first, '1', row_size) == nullptr) {
+      // We have a row with all zeros. Just change on of them!
+      tbuffer.first[0] = '1';
+    }
+    os->write(tbuffer.first, row_size);
+    os->put('\n');
+    --row_size;
+  }
+  std::return_temporary_buffer(tbuffer.first);
+}
 
 }  // namespace pap_solver
 
-#include "matrix_parser.t.hpp"
 #endif
