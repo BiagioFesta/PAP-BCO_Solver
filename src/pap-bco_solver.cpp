@@ -50,7 +50,6 @@ PAP_BCO_Solver::PAP_BCO_Solver() noexcept {
 
 int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
   static struct option long_options[] = {
-    {"file", required_argument, 0, 'f'},
     {"compressed", no_argument, 0, 'c'},
     {"help", no_argument, 0, 'h'},
     {"generate", required_argument, 0, 'g'},
@@ -59,12 +58,9 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
   int option_index;
   while (true) {
     option_index = 0;
-    auto c = getopt_long(argc, argv, "g:hcf:", long_options, &option_index);
+    auto c = getopt_long(argc, argv, "g:hc", long_options, &option_index);
     if (c == -1) break;
     switch (c) {
-      case 'f':
-        m_options.input_filename = optarg;
-        break;
       case 'c':
         m_options.compressed_matrix = true;
         break;
@@ -87,6 +83,9 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
         std::cerr << "Invalid parsing options\n";
         return -1;
     }
+  }
+  if (optind < argc) {
+    m_options.input_filename = argv[optind];
   }
   return 0;
 }
@@ -178,9 +177,11 @@ void PAP_BCO_Solver::parse_matrix_from_stdin() {
 void PAP_BCO_Solver::print_help() const noexcept {
   std::cout <<
       R"##(
+Use: pap-bco_solver [OPTION]... [FILENAME]
    Command Options:
--f, --file FILENAME     : The input matrix to load.
--c, --compresed         : Specify whether the input matrix is a compressed format or not.
+-c, --compresed           : Specify whether the input matrix is a compressed format or not.
+-g SIZE, --generate SIZE  : Generate a valid random matrix with dimention SIZE.
+-h, --help                : Display this guide.
 
 )##";
 }
