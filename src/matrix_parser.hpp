@@ -75,6 +75,11 @@ class MatrixParser {
   void generate_rnd_compressed_matrix(RND* rnd_engine,
                                       size_t matrix_size,
                                       std::ostream* os) const;
+
+  template<typename RND>
+  void generate_rnd_matrix(RND* rnd_engine,
+                           size_t matrix_size,
+                           std::ostream* os) const;
 };
 
 
@@ -106,6 +111,8 @@ void MatrixParser::parse_compressed_matrix(std::istream* is,
       case 10:  // ASCII for \n
         if (prev_lenght_line > 0 && current_column != prev_lenght_line) {
           throw std::runtime_error("Parsing error, line too short.");
+        } else if (prev_lenght_line == 0 && current_column == 1) {
+          throw std::runtime_error("Cannot parse an empty matrix");
         }
         prev_lenght_line = current_column;
         ++current_vertex;
@@ -113,6 +120,9 @@ void MatrixParser::parse_compressed_matrix(std::istream* is,
       default:  // Pass away for other any char
         break;
     }
+  }
+  if (current_vertex == 0) {
+    throw std::runtime_error("Cannot parse an empty matrix");
   }
 }
 
@@ -135,7 +145,7 @@ void MatrixParser::parse_full_matrix(std::istream* is,
   while (is->eof() == false) {
     panning = current_vertex + 1;
     is->getline(tbuffer.first, tbuffer.second);
-
+    if (std::strlen(tbuffer.first) == 0) continue;
     char* i = tbuffer.first;
     while (*i != 0) {
       switch (*i) {
@@ -169,7 +179,9 @@ void MatrixParser::parse_full_matrix(std::istream* is,
     ++current_vertex;
     current_column = current_vertex + 1;
   }
-
+  if (current_vertex == 0) {
+    throw std::runtime_error("Cannot parse an empty matrix");
+  }
   std::return_temporary_buffer(tbuffer.first);
 }
 
@@ -201,6 +213,43 @@ void MatrixParser::generate_rnd_compressed_matrix(RND* rnd_engine,
     --row_size;
   }
   std::return_temporary_buffer(tbuffer.first);
+}
+
+template<typename RND>
+void MatrixParser::generate_rnd_matrix(RND* rnd_engine,
+                                       size_t matrix_size,
+                                       std::ostream* os) const {
+  if (matrix_size == 0) return;
+  std::uniform_int_distribution<> rnd_value(48, 49);
+  char* matrix_data = new char[matrix_size*matrix_size];
+  for (auto i = 0; i < matrix_size; ++i) {
+    // Generate the i-th row of the matrix
+    if (i > 0) {
+    }
+    for (auto j = 0; j < i; ++j) {
+      // Generate the j-th column of the matrix with known data.
+      matrix_data[i*matrix_size + j] = matrix_data[j*matrix_size + i];
+    }
+    for (auto j = i; j < matrix_size; ++j) {
+      // Generate the j-th column of the matrix with new data.
+      char data_element;
+      if (j == i) {
+        data_element = '0';
+      } else {
+        data_element = static_cast<char>(rnd_value(*rnd_engine));
+      }
+      matrix_data[i*matrix_size + j] = data_element;
+    }
+    if (std::memchr(matrix_data + (i*matrix_size),
+                    '1',
+                    matrix_size) == nullptr) {
+      // We have a row with all zeros. Just change on of them!
+      matrix_data[i*matrix_size + matrix_size - 1] = '1';
+    }
+    os->write(matrix_data + (i*matrix_size), matrix_size);
+    os->put('\n');
+  }
+  delete[] matrix_data;
 }
 
 }  // namespace pap_solver

@@ -73,7 +73,13 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
         break;
       case 'g':
         m_options.generate_random_matrix = true;
-        m_options.size_generation_matrix = std::stoi(optarg);
+        try {
+          m_options.size_generation_matrix = std::stoi(optarg);
+        } catch (const std::exception& err) {
+          std::cerr <<
+              "--generate NUMBER\nNUMBER must to be a integer number!\n";
+          return -1;
+        }
         break;
       case '?':
         return -1;
@@ -81,13 +87,6 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
         std::cerr << "Invalid parsing options\n";
         return -1;
     }
-  }
-  if (m_options.display_help == false &&
-      m_options.generate_random_matrix == false &&
-      m_options.input_filename.size() == 0) {
-    std::cerr << "You must specify an input file with the option: \n"
-        "      -f FILENAME \n";
-    return -1;
   }
   return 0;
 }
@@ -115,7 +114,10 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
     return;
   }
 
-  parse_matrix_fromfile();
+  if (m_options.input_filename.size() > 0)
+    parse_matrix_fromfile();
+  else
+    parse_matrix_from_stdin();
 
   SpanningTree<Graph> spanning_tree;
   spanning_tree.makeRandom_fromGraph(m_graph, &rnd_eng);
@@ -134,18 +136,18 @@ void PAP_BCO_Solver::parse_matrix_fromfile() {
                                 "' cannot be read.");
   }
   if (m_options.compressed_matrix == true) {
-    m_mat_parser.parse_compressed_matrix(&file, &m_graph, [](size_t v1,
-                                                       size_t v2,
-                                                       Graph* g) {
-                                     boost::add_edge(v1, v2, *g);
-                                   });
+    m_mat_parser.parse_compressed_matrix(&file,
+                                         &m_graph,
+                                         [](size_t v1, size_t v2, Graph* g) {
+                                           boost::add_edge(v1, v2, *g);
+                                         });
   } else {
     try {
-      m_mat_parser.parse_full_matrix(&file, &m_graph, [](size_t v1,
-                                                   size_t v2,
-                                                   Graph* g) {
-                                 boost::add_edge(v1, v2, *g);
-                               });
+      m_mat_parser.parse_full_matrix(&file,
+                                     &m_graph,
+                                     [](size_t v1, size_t v2, Graph* g) {
+                                       boost::add_edge(v1, v2, *g);
+                                     });
     } catch(const std::exception& err) {
       // TODO(biagio): make the suggestion more usefull
       std::string messages = err.what();
@@ -157,19 +159,19 @@ void PAP_BCO_Solver::parse_matrix_fromfile() {
   file.close();
 }
 
-template<typename RND>
-void PAP_BCO_Solver::generate_random_matrix(RND* rnd_engine) const {
-  std::ostream* os = &std::cout;
-  std::ofstream file;
-  if (m_options.input_filename.size() != 0) {
-    file.open(m_options.input_filename);
-    os = &file;
-  }
-  m_mat_parser.generate_rnd_compressed_matrix(rnd_engine,
-                                              m_options.size_generation_matrix,
-                                              os);
-  if (m_options.input_filename.size() != 0) {
-    file.close();
+void PAP_BCO_Solver::parse_matrix_from_stdin() {
+  if (m_options.compressed_matrix == true) {
+    m_mat_parser.parse_compressed_matrix(&std::cin,
+                                         &m_graph,
+                                         [](size_t v1, size_t v2, Graph* g) {
+                                           boost::add_edge(v1, v2, *g);
+                                         });
+  } else {
+    m_mat_parser.parse_full_matrix(&std::cin,
+                                   &m_graph,
+                                   [](size_t v1, size_t v2, Graph* g) {
+                                     boost::add_edge(v1, v2, *g);
+                                   });
   }
 }
 

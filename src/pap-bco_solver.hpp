@@ -70,6 +70,9 @@ class PAP_BCO_Solver {
   /// @brief Parse the m_graph reading the input file.
   void parse_matrix_fromfile();
 
+  /// @brief Parse the m_graph reading from the std input.
+  void parse_matrix_from_stdin();
+
   /// @brief Generate a random matrix and prints it
   ///        on the std output or on the file if it has been
   ///        specified in the options.
@@ -102,6 +105,29 @@ class PAP_BCO_Solver {
   bool is_odd_cotree_edge(const Graph::edge_descriptor& e,
                           const SpanningTree<Graph>& st) const;
 };
+
+
+template<typename RND>
+void PAP_BCO_Solver::generate_random_matrix(RND* rnd_engine) const {
+  std::ostream* os = &std::cout;
+  std::ofstream file;
+  if (m_options.input_filename.size() != 0) {
+    file.open(m_options.input_filename);
+    os = &file;
+  }
+  if (m_options.compressed_matrix == true) {
+  m_mat_parser.generate_rnd_compressed_matrix(rnd_engine,
+                                              m_options.size_generation_matrix,
+                                              os);
+  } else {
+    m_mat_parser.generate_rnd_matrix(rnd_engine,
+                                     m_options.size_generation_matrix,
+                                     os);
+  }
+  if (m_options.input_filename.size() != 0) {
+    file.close();
+  }
+}
 
 }  // namespace pap_solver
 
