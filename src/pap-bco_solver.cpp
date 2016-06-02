@@ -105,8 +105,8 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
     return;
   }
 
-  // std::default_random_engine rnd_eng(std::time(nullptr));
-  std::default_random_engine rnd_eng(0);
+  std::default_random_engine rnd_eng(std::time(nullptr));
+  // std::default_random_engine rnd_eng(0);
 
   if (m_options.generate_random_matrix == true) {
     generate_random_matrix(&rnd_eng);
@@ -122,8 +122,9 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
   spanning_tree.makeRandom_fromGraph(m_graph, &rnd_eng);
   spanning_tree.print(&std::cout);
   assign_edges_property_byTree(spanning_tree);
-  algorithm_assign_port_byTree(spanning_tree);
+  auto num_AB_vertices = algorithm_assign_port_byTree(spanning_tree);
   print_all_vertices_and_ports(&std::cout);
+  std::cout << "Number of portAB: " << num_AB_vertices << '\n';
 }
 
 void PAP_BCO_Solver::parse_matrix_fromfile() {
@@ -198,9 +199,12 @@ void PAP_BCO_Solver::print_header() const noexcept {
 )##";
 }
 
-void PAP_BCO_Solver::algorithm_assign_port_byTree(
+size_t PAP_BCO_Solver::algorithm_assign_port_byTree(
     const SpanningTree<Graph>& st) {
   const auto& map_tree = st.getMap();
+
+  // First step. Assign each vertex to A or B in according to the spanning
+  // tree.
   for (const auto& node : map_tree) {
     auto& port_parent = m_graph[node.second].m_port;
     auto& port_this = m_graph[node.first].m_port;
@@ -213,6 +217,8 @@ void PAP_BCO_Solver::algorithm_assign_port_byTree(
     }
   }
 
+  // g' is the ''odd'' co-tree graph. All edges which don't belong to the tree
+  // and are odd co-tree edge.
   struct PredEdges {
     PredEdges() = default;
     bool operator()(const Graph::edge_descriptor& e) const {
@@ -225,8 +231,12 @@ void PAP_BCO_Solver::algorithm_assign_port_byTree(
 
   bool found_one_degree;
   bool g_prime_empty = false;
+  size_t number_of_AB = 0;
+
+  // Second step of the algorithm.
   while (!g_prime_empty) {
     found_one_degree = false;
+    // Looking for an vertex with degree = 1
     for (auto i = boost::vertices(g_prime).first;
          i != boost::vertices(g_prime).second && found_one_degree == false;
          ++i) {
@@ -237,9 +247,11 @@ void PAP_BCO_Solver::algorithm_assign_port_byTree(
         //              non c'è bisogno for_each
         std::for_each(i_edges.first,
                       i_edges.second,
-                      [&g_prime](const Graph::edge_descriptor& e) {
+                      [&g_prime, &number_of_AB]
+                      (const Graph::edge_descriptor& e) {
                         auto target = boost::target(e, g_prime);
                         g_prime[target].m_port = VertexProperties::Port::PortAB;
+                        ++number_of_AB;
                         g_prime[e].m_intree = true;
                       });
         found_one_degree = true;
@@ -262,6 +274,7 @@ void PAP_BCO_Solver::algorithm_assign_port_byTree(
       if (num_degree_max > 0) {
         // Ho trovato il massimo, lo aggiunto al coverset e lo  poto!
         g_prime[max_vertex_degree].m_port = VertexProperties::Port::PortAB;
+        ++number_of_AB;
         std::for_each(boost::out_edges(max_vertex_degree, g_prime).first,
                       boost::out_edges(max_vertex_degree, g_prime).second,
                       [&g_prime](const Graph::edge_descriptor& e) {
@@ -273,6 +286,7 @@ void PAP_BCO_Solver::algorithm_assign_port_byTree(
       }
     }
   }
+  return number_of_AB;
 }
 
 void PAP_BCO_Solver::print_all_vertices_and_ports(std::ostream* os)

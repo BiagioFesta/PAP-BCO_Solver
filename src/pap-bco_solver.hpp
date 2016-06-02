@@ -87,7 +87,7 @@ class PAP_BCO_Solver {
 
   void print_all_vertices_and_ports(std::ostream* os) const noexcept;
 
-  void algorithm_assign_port_byTree(const SpanningTree<Graph>& st);
+  size_t algorithm_assign_port_byTree(const SpanningTree<Graph>& st);
 
   /// @brief Takes a valid spanning tree and assigns property
   ///        of all adges of the graph. (Such as in_tree, or odd).
