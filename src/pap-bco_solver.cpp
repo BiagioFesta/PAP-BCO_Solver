@@ -19,11 +19,12 @@
 
 #include <getopt.h>
 #include <iostream>
+#include <string>
 #include <fstream>
 #include <stdexcept>
-#include <string>
 #include <ctime>
 #include <queue>
+#include <map>
 #include <boost/graph/filtered_graph.hpp>
 #include <boost/graph/graph_utility.hpp>
 #include <boost/graph/bipartite.hpp>
@@ -194,9 +195,12 @@ void PAP_BCO_Solver::print_help() const noexcept {
       R"##(
 Use: pap-bco_solver [OPTION]... [FILENAME]
    Command Options:
--c, --compresed           : Specify whether the input matrix is a compressed format or not.
--g SIZE, --generate SIZE  : Generate a valid random matrix with dimention SIZE.
--h, --help                : Display this guide.
+-c, --compresed                : Specify whether the input matrix is a compressed format or not.
+-g SIZE[:PERC],
+   --generate SIZE[:PERC]      : Generate a valid random matrix with dimention SIZE.
+                                 PERC is a real number between 0 and 1 and represents
+                                 the probability to generate a 1 in the matrix.
+-h, --help                     : Display this guide.
 
 )##";
 }
@@ -231,17 +235,15 @@ size_t PAP_BCO_Solver::algorithm_assign_port_byTree(
     }
   }
 
-  // g' is the ''odd'' co-tree graph. All edges which don't belong to the tree
-  // and are odd co-tree edge.
-  struct PredEdges {
-    PredEdges() = default;
-    bool operator()(const Graph::edge_descriptor& e) const {
-      // In g' ci sono i nodi che sono co-tree && dispari.
-      return (!((*mp_graph)[e].m_intree) && ((*mp_graph)[e].m_odd));
-    }
-    Graph* mp_graph;
-  } pred_edges{&m_graph};
-  boost::filtered_graph<Graph, PredEdges> g_prime(m_graph, pred_edges);
+  // g' is the ''odd'' co-tree graph.
+  std::map<Graph::edge_descriptor, bool> edges_in_g_prime;
+  auto range_edgs = boost::edges(m_graph);
+  for (auto e = range_edgs.first; e != range_edgs.second; ++e) {
+    edges_in_g_prime[*e] = m_graph[*e].m_odd;
+  }
+  PredicateFilterEdge<decltype(edges_in_g_prime)> predicate(&edges_in_g_prime);
+  boost::filtered_graph<Graph, decltype(predicate)> g_prime(m_graph,
+                                                            predicate);
 
   bool found_one_degree;
   bool g_prime_empty = false;
@@ -251,23 +253,17 @@ size_t PAP_BCO_Solver::algorithm_assign_port_byTree(
   while (!g_prime_empty) {
     found_one_degree = false;
     // Looking for an vertex with degree = 1
-    for (auto i = boost::vertices(g_prime).first;
-         i != boost::vertices(g_prime).second && found_one_degree == false;
+    auto range_verts = boost::vertices(g_prime);
+    for (auto i = range_verts.first;
+         i != range_verts.second && found_one_degree == false;
          ++i) {
       auto degree = boost::out_degree(*i, g_prime);
-      auto i_edges = boost::out_edges(*i, g_prime);
       if (degree == 1) {
-        // TODO(biagio): è stupido sai a priori che è uno!
-        //              non c'è bisogno for_each
-        std::for_each(i_edges.first,
-                      i_edges.second,
-                      [&g_prime, &number_of_AB]
-                      (const Graph::edge_descriptor& e) {
-                        auto target = boost::target(e, g_prime);
-                        g_prime[target].m_port = VertexProperties::Port::PortAB;
-                        ++number_of_AB;
-                        g_prime[e].m_intree = true;
-                      });
+        Graph::edge_descriptor edge = *(boost::out_edges(*i, g_prime).first);
+        auto target = boost::target(edge, g_prime);
+        g_prime[target].m_port = VertexProperties::Port::PortAB;
+        ++number_of_AB;
+        edges_in_g_prime[edge] = false;
         found_one_degree = true;
       }
     }
@@ -291,8 +287,9 @@ size_t PAP_BCO_Solver::algorithm_assign_port_byTree(
         ++number_of_AB;
         std::for_each(boost::out_edges(max_vertex_degree, g_prime).first,
                       boost::out_edges(max_vertex_degree, g_prime).second,
-                      [&g_prime](const Graph::edge_descriptor& e) {
-                        g_prime[e].m_intree = true;
+                      [&g_prime, &edges_in_g_prime]
+                      (const Graph::edge_descriptor& e) {
+                        edges_in_g_prime[e] = false;
                       });
       } else {
         // Non ho trovato massimo => non ci sono edges

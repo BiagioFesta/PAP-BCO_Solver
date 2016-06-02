@@ -87,6 +87,19 @@ class PAP_BCO_Solver {
 
   void print_all_vertices_and_ports(std::ostream* os) const noexcept;
 
+  template<typename AssociativeMap>
+  struct PredicateFilterEdge {
+    PredicateFilterEdge() = default;
+    explicit PredicateFilterEdge(AssociativeMap* map) :
+        m_edges_list(*map) {
+    }
+    bool operator()(const Graph::edge_descriptor& e) const {
+      return boost::get(m_edges_list, e);
+    }
+    typedef boost::associative_property_map<AssociativeMap> edge_list_t;
+    edge_list_t m_edges_list;
+  };
+
   size_t algorithm_assign_port_byTree(const SpanningTree<Graph>& st);
 
   /// @brief Takes a valid spanning tree and assigns property
