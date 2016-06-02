@@ -251,7 +251,8 @@ void MatrixParser::generate_rnd_matrix(RND* rnd_engine,
     }
     if (std::memchr(matrix_data + (i*matrix_size + i),
                     '1',
-                    matrix_size - i) == nullptr) {
+                    matrix_size - i) == nullptr
+        && i != matrix_size - 1) {
       // We have a row with all zeros after the mid!. Just change on of them!
       matrix_data[i*matrix_size + matrix_size - 1] = '1';
     }
