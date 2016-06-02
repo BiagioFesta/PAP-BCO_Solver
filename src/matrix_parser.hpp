@@ -74,12 +74,14 @@ class MatrixParser {
   template<typename RND>
   void generate_rnd_compressed_matrix(RND* rnd_engine,
                                       size_t matrix_size,
-                                      std::ostream* os) const;
+                                      std::ostream* os,
+                                      float one_percent = 0.05f) const;
 
   template<typename RND>
   void generate_rnd_matrix(RND* rnd_engine,
                            size_t matrix_size,
-                           std::ostream* os) const;
+                           std::ostream* os,
+                           float one_percent = 0.05f) const;
 };
 
 
@@ -188,9 +190,14 @@ void MatrixParser::parse_full_matrix(std::istream* is,
 template<typename RND>
 void MatrixParser::generate_rnd_compressed_matrix(RND* rnd_engine,
                                                   size_t matrix_size,
-                                                  std::ostream* os) const {
+                                                  std::ostream* os,
+                                                  float one_percent) const {
+  if (one_percent > 1.f || one_percent <= 0) {
+    throw std::runtime_error("Bad argument");
+  }
+  if (matrix_size == 0) return;
   // 48 and 49 are '0' and '1' in the ASCII codec
-  std::uniform_int_distribution<> rnd_value(48, 49);
+  std::uniform_real_distribution<> rnd_value(0, 1);
 
   auto tbuffer = std::get_temporary_buffer<char>(matrix_size);
   if (tbuffer.first == nullptr) {
@@ -201,7 +208,7 @@ void MatrixParser::generate_rnd_compressed_matrix(RND* rnd_engine,
   size_t row_size = matrix_size - 1;
   while (row_size) {
     for (i = 0; i < row_size; ++i) {
-      tbuffer.first[i] = rnd_value(*rnd_engine);
+      tbuffer.first[i] = rnd_value(*rnd_engine) < one_percent? '1' : '0';
     }
     // We cannot have a vertex without outgoing edge
     if (std::memchr(tbuffer.first, '1', row_size) == nullptr) {
@@ -218,14 +225,16 @@ void MatrixParser::generate_rnd_compressed_matrix(RND* rnd_engine,
 template<typename RND>
 void MatrixParser::generate_rnd_matrix(RND* rnd_engine,
                                        size_t matrix_size,
-                                       std::ostream* os) const {
+                                       std::ostream* os,
+                                       float one_percent) const {
+  if (one_percent > 1.f || one_percent <= 0) {
+    throw std::runtime_error("Bad argument");
+  }
   if (matrix_size == 0) return;
-  std::uniform_int_distribution<> rnd_value(48, 49);
+  std::uniform_real_distribution<> rnd_value(0, 1);
   char* matrix_data = new char[matrix_size*matrix_size];
   for (auto i = 0; i < matrix_size; ++i) {
     // Generate the i-th row of the matrix
-    if (i > 0) {
-    }
     for (auto j = 0; j < i; ++j) {
       // Generate the j-th column of the matrix with known data.
       matrix_data[i*matrix_size + j] = matrix_data[j*matrix_size + i];
@@ -236,14 +245,14 @@ void MatrixParser::generate_rnd_matrix(RND* rnd_engine,
       if (j == i) {
         data_element = '0';
       } else {
-        data_element = static_cast<char>(rnd_value(*rnd_engine));
+        data_element = rnd_value(*rnd_engine) < one_percent? '1' : '0';
       }
       matrix_data[i*matrix_size + j] = data_element;
     }
-    if (std::memchr(matrix_data + (i*matrix_size),
+    if (std::memchr(matrix_data + (i*matrix_size + i),
                     '1',
-                    matrix_size) == nullptr) {
-      // We have a row with all zeros. Just change on of them!
+                    matrix_size - i) == nullptr) {
+      // We have a row with all zeros after the mid!. Just change on of them!
       matrix_data[i*matrix_size + matrix_size - 1] = '1';
     }
     os->write(matrix_data + (i*matrix_size), matrix_size);
