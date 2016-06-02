@@ -274,7 +274,7 @@ size_t PAP_BCO_Solver::algorithm_assign_port_byTree(
     if (found_one_degree == false) {
       // Non ho trovato vertici con degree uguali a 1
       // Quindi cerco quello massimo e lo poto!
-      int num_degree_max = 0;
+      size_t num_degree_max = 0;
       Graph::vertex_descriptor max_vertex_degree;
       for (auto i = boost::vertices(g_prime).first;
            i != boost::vertices(g_prime).second;

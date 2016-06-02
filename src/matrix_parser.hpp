@@ -233,9 +233,9 @@ void MatrixParser::generate_rnd_matrix(RND* rnd_engine,
   if (matrix_size == 0) return;
   std::uniform_real_distribution<> rnd_value(0, 1);
   char* matrix_data = new char[matrix_size*matrix_size];
-  for (auto i = 0; i < matrix_size; ++i) {
+  for (auto i = 0u; i < matrix_size; ++i) {
     // Generate the i-th row of the matrix
-    for (auto j = 0; j < i; ++j) {
+    for (auto j = 0u; j < i; ++j) {
       // Generate the j-th column of the matrix with known data.
       matrix_data[i*matrix_size + j] = matrix_data[j*matrix_size + i];
     }
