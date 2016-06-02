@@ -30,6 +30,7 @@ struct ProgramOptions {
   bool display_help = false;
   bool generate_random_matrix = false;
   size_t size_generation_matrix = 0;
+  float perc_one_into_gen_matrix = 0.5;
 };
 }
 

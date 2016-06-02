@@ -67,15 +67,29 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
       case 'h':
         m_options.display_help = true;
         break;
-      case 'g':
+      case 'g': {
         m_options.generate_random_matrix = true;
+        std::string temp_arg = optarg;
         try {
-          m_options.size_generation_matrix = std::stoi(optarg);
+          auto finder = temp_arg.find(':');
+          m_options.size_generation_matrix =
+              std::stoi(temp_arg.substr(0, finder));
+          if (finder != std::string::npos) {
+            m_options.perc_one_into_gen_matrix =
+                std::stof(temp_arg.substr(finder + 1));
+          }
         } catch (const std::exception& err) {
-          std::cerr <<
-              "--generate NUMBER\nNUMBER must to be a integer number!\n";
+          std::cerr << "--generate NUMBER[:PERC]\n"
+              "NUMBER must to be a integer number!\n";
           return -1;
         }
+        if (m_options.perc_one_into_gen_matrix > 1.f ||
+            m_options.perc_one_into_gen_matrix <= 0) {
+          std::cerr << "--generate NUMBER[:PERC]\n"
+              "PERC must to be a float number between 0 and 1\n";
+          return -1;
+        }
+      }
         break;
       case '?':
         return -1;

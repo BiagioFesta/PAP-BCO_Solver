@@ -118,11 +118,13 @@ void PAP_BCO_Solver::generate_random_matrix(RND* rnd_engine) const {
   if (m_options.compressed_matrix == true) {
   m_mat_parser.generate_rnd_compressed_matrix(rnd_engine,
                                               m_options.size_generation_matrix,
-                                              os);
+                                              os,
+                                              m_options.perc_one_into_gen_matrix);
   } else {
     m_mat_parser.generate_rnd_matrix(rnd_engine,
                                      m_options.size_generation_matrix,
-                                     os);
+                                     os,
+                                     m_options.perc_one_into_gen_matrix);
   }
   if (m_options.input_filename.size() != 0) {
     file.close();
