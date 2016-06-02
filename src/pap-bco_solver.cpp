@@ -382,13 +382,8 @@ bool PAP_BCO_Solver::is_odd_cotree_edge(const Graph::edge_descriptor& e,
           else
             boost::put(color_map, target, black_t);
           openlist.push(target);
-        } else if (color_adjacent == black_t) {
-          if (this_node_color == black_t) return true;
-        } else if (color_adjacent == gray_t) {
-          if (this_node_color == gray_t) return true;
-        } else {
-          // TODO(biagio): verde!?! non dovrebbe run-time error!
-          break;
+        } else if (color_adjacent == this_node_color) {
+          return true;
         }
       }
     }
