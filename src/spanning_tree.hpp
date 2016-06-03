@@ -67,8 +67,10 @@ class SpanningTree {
   ///
   void print(std::ostream* os) const;
 
+  /// @brief Clean the tree.
   void clean() noexcept;
 
+  /// @return the internal map.
   const Map& getMap() const noexcept { return m_data_tree; }
 
  private:
