@@ -31,29 +31,10 @@ namespace pap_solver {
 
 class PAP_BCO_Solver {
  public:
-  /// Properties for a vertex.
-  struct VertexProperties {
-    enum Port {
-      UnAssigned,
-      PortA,
-      PortB,
-      PortAB
-    } m_port = Port::UnAssigned;
-    bool m_inCoverSet = false;
-  };
-
-  /// Properties for a edge.
-  struct EdgeProperties {
-    bool m_intree = false;
-    bool m_odd = false;
-  };
-
   /// A Graph type.
   typedef boost::adjacency_list<boost::vecS,
                                 boost::vecS,
-                                boost::undirectedS,
-                                VertexProperties,
-                                EdgeProperties> Graph;
+                                boost::undirectedS> Graph;
   /// Default constructor
   PAP_BCO_Solver() noexcept;
 
@@ -67,11 +48,8 @@ class PAP_BCO_Solver {
   /// @brief Parse the program option through the command line.
   int parse_cmdline_options(int argc, char* argv[]);
 
-  /// @brief Parse the m_graph reading the input file.
-  void parse_matrix_fromfile();
-
-  /// @brief Parse the m_graph reading from the std input.
-  void parse_matrix_from_stdin();
+  /// @brief Parse the m_graph reading the input file or stdin.
+  void parse_matrix();
 
   /// @brief Generate a random matrix and prints it
   ///        on the std output or on the file if it has been
@@ -84,39 +62,6 @@ class PAP_BCO_Solver {
 
   /// @brief It prints a briefly header on the std output.
   void print_header() const noexcept;
-
-  void print_all_vertices_and_ports(std::ostream* os) const noexcept;
-
-  template<typename AssociativeMap>
-  struct PredicateFilterEdge {
-    PredicateFilterEdge() = default;
-    explicit PredicateFilterEdge(AssociativeMap* map) :
-        m_edges_list(*map) {
-    }
-    bool operator()(const Graph::edge_descriptor& e) const {
-      return boost::get(m_edges_list, e);
-    }
-    typedef boost::associative_property_map<AssociativeMap> edge_list_t;
-    edge_list_t m_edges_list;
-  };
-
-  size_t algorithm_assign_port_byTree(const SpanningTree<Graph>& st);
-
-  /// @brief Takes a valid spanning tree and assigns property
-  ///        of all adges of the graph. (Such as in_tree, or odd).
-  /// @param [in] st    A Valid spanning tree for the graph.
-  ///
-  void assign_edges_property_byTree(const SpanningTree<Graph>& st);
-
-  ///
-  /// @param [in] e    A co-tree edge you want to check.
-  /// @param [in] st   A spanning tree of the graph.
-  ///
-  /// @return whether the co-tree edge ('e') is a odd co-tree edge
-  ///         or not.
-  /// @note The edge 'e' must to be a co-tree edge.
-  bool is_odd_cotree_edge(const Graph::edge_descriptor& e,
-                          const SpanningTree<Graph>& st) const;
 };
 
 
@@ -129,15 +74,17 @@ void PAP_BCO_Solver::generate_random_matrix(RND* rnd_engine) const {
     os = &file;
   }
   if (m_options.compressed_matrix == true) {
-  m_mat_parser.generate_rnd_compressed_matrix(rnd_engine,
-                                              m_options.size_generation_matrix,
-                                              os,
-                                              m_options.perc_one_into_gen_matrix);
+    m_mat_parser.generate_rnd_compressed_matrix(
+        rnd_engine,
+        m_options.size_generation_matrix,
+        os,
+        m_options.perc_one_into_gen_matrix);
   } else {
-    m_mat_parser.generate_rnd_matrix(rnd_engine,
-                                     m_options.size_generation_matrix,
-                                     os,
-                                     m_options.perc_one_into_gen_matrix);
+    m_mat_parser.generate_rnd_matrix(
+        rnd_engine,
+        m_options.size_generation_matrix,
+        os,
+        m_options.perc_one_into_gen_matrix);
   }
   if (m_options.input_filename.size() != 0) {
     file.close();

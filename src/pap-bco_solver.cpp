@@ -29,6 +29,7 @@
 #include <boost/graph/graph_utility.hpp>
 #include <boost/graph/bipartite.hpp>
 #include "pap-bco_solver.hpp"
+#include "Algorithm.hpp"
 
 int main(int argc, char *argv[]) {
   try {
@@ -107,96 +108,63 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
 
 void PAP_BCO_Solver::run(int argc, char* argv[]) {
   if (parse_cmdline_options(argc, argv)) {
-    throw std::invalid_argument("Invalid process"
-                                " parsing command line arguments");
-  }
-
-  if (m_options.generate_random_matrix == false) {
-#ifndef _DEBUG
-    print_header();
-#endif
+    throw std::invalid_argument(
+        "Invalid process parsing command line arguments");
   }
 
   if (m_options.display_help == true) {
     print_help();
-    return;
-  }
-
-  std::default_random_engine rnd_eng(std::time(nullptr));
-  // std::default_random_engine rnd_eng(0);
-
-  if (m_options.generate_random_matrix == true) {
-    generate_random_matrix(&rnd_eng);
-    return;
-  }
-
-  if (m_options.input_filename.size() > 0)
-    parse_matrix_fromfile();
-  else
-    parse_matrix_from_stdin();
-
-  SpanningTree<Graph> spanning_tree;
-  spanning_tree.makeRandom_fromGraph(m_graph, &rnd_eng);
-  std::cout << "---RANDOM SPANNING TREE GENERATED:---\n";
-  spanning_tree.print(&std::cout);
-  std::cout << "-------------------------------------\n\n";
-
-
-  assign_edges_property_byTree(spanning_tree);
-  auto num_AB_vertices = algorithm_assign_port_byTree(spanning_tree);
-
-  std::cout << "---SOLUTION FOUND:---\n";
-  print_all_vertices_and_ports(&std::cout);
-  std::cout << "Number of portAB: " << num_AB_vertices << '\n';
-  std::cout << "---------------------\n";
-}
-
-void PAP_BCO_Solver::parse_matrix_fromfile() {
-  std::ifstream file;
-  file.open(m_options.input_filename);
-  if (file.fail() == true) {
-    throw std::invalid_argument("The file '" +
-                                m_options.input_filename +
-                                "' cannot be read.");
-  }
-  if (m_options.compressed_matrix == true) {
-    m_mat_parser.parse_compressed_matrix(&file,
-                                         &m_graph,
-                                         [](size_t v1, size_t v2, Graph* g) {
-                                           boost::add_edge(v1, v2, *g);
-                                         });
   } else {
-    try {
-      m_mat_parser.parse_full_matrix(&file,
-                                     &m_graph,
-                                     [](size_t v1, size_t v2, Graph* g) {
-                                       boost::add_edge(v1, v2, *g);
-                                     });
-    } catch(const std::exception& err) {
-      // TODO(biagio): make the suggestion more usefull
-      std::string messages = err.what();
-      messages += "\n\tMaybe the option '-c' could be usefull."
-          " Use '-h' for help";
-      throw std::runtime_error(messages);
+    auto seed = std::time(nullptr);
+    std::default_random_engine rnd_eng(seed);
+
+    if (m_options.generate_random_matrix == true) {
+      generate_random_matrix(&rnd_eng);
+    } else {
+      print_header();
+      parse_matrix();
+      Algorithm<Graph, std::default_random_engine> solver;
+      solver.set_seed(seed);
+      auto solution = solver.solve(m_graph);
+      decltype(solver)::print_solution(&std::cout, solution);
     }
   }
-  file.close();
 }
 
-void PAP_BCO_Solver::parse_matrix_from_stdin() {
-  if (m_options.compressed_matrix == true) {
-    m_mat_parser.parse_compressed_matrix(&std::cin,
-                                         &m_graph,
-                                         [](size_t v1, size_t v2, Graph* g) {
-                                           boost::add_edge(v1, v2, *g);
-                                         });
-  } else {
-    m_mat_parser.parse_full_matrix(&std::cin,
-                                   &m_graph,
-                                   [](size_t v1, size_t v2, Graph* g) {
-                                     boost::add_edge(v1, v2, *g);
-                                   });
+void PAP_BCO_Solver::parse_matrix() {
+  std::istream* is = &std::cin;
+  std::ifstream file;
+  if (m_options.input_filename.size() != 0) {
+    file.open(m_options.input_filename);
+    if (file.fail() == true)
+      throw std::invalid_argument(
+          "The file '" + m_options.input_filename + "' cannot be open.");
   }
+
+  auto add_edge_function = [](size_t v1, size_t v2, Graph* g) {
+    boost::add_edge(v1, v2, *g);
+  };
+  std::function<void(void)>function_parse_matrix;
+  if (m_options.compressed_matrix == true) {
+    function_parse_matrix = std::bind(
+        &MatrixParser::parse_compressed_matrix
+        <Graph, decltype(add_edge_function)>,
+        m_mat_parser,
+        is,
+        &m_graph,
+        add_edge_function);
+  } else {
+    function_parse_matrix = std::bind(
+        &MatrixParser::parse_full_matrix
+        <Graph, decltype(add_edge_function)>,
+        m_mat_parser,
+        is,
+        &m_graph,
+        add_edge_function);
+  }
+  function_parse_matrix();
+  if (file.is_open())
+    file.close();
 }
 
 void PAP_BCO_Solver::print_help() const noexcept {
@@ -224,196 +192,6 @@ void PAP_BCO_Solver::print_header() const noexcept {
    (at your option) any later version.
 
 )##";
-}
-
-size_t PAP_BCO_Solver::algorithm_assign_port_byTree(
-    const SpanningTree<Graph>& st) {
-  const auto& map_tree = st.getMap();
-
-  // First step. Assign each vertex to A or B in according to the spanning
-  // tree.
-  for (const auto& node : map_tree) {
-    auto& port_parent = m_graph[node.second].m_port;
-    auto& port_this = m_graph[node.first].m_port;
-    if (port_parent == VertexProperties::Port::UnAssigned) {
-      port_this = VertexProperties::Port::PortA;
-    } else if (port_parent == VertexProperties::Port::PortA) {
-      port_this = VertexProperties::Port::PortB;
-    } else {
-      port_this = VertexProperties::Port::PortA;
-    }
-  }
-
-  // g' is the ''odd'' co-tree graph.
-  std::map<Graph::edge_descriptor, bool> edges_in_g_prime;
-  auto range_edgs = boost::edges(m_graph);
-  for (auto e = range_edgs.first; e != range_edgs.second; ++e) {
-    edges_in_g_prime[*e] = m_graph[*e].m_odd;
-  }
-  PredicateFilterEdge<decltype(edges_in_g_prime)> predicate(&edges_in_g_prime);
-  boost::filtered_graph<Graph, decltype(predicate)> g_prime(m_graph,
-                                                            predicate);
-
-  bool found_one_degree;
-  bool g_prime_empty = false;
-  size_t number_of_AB = 0;
-
-  // Second step of the algorithm.
-  while (!g_prime_empty) {
-    found_one_degree = false;
-    // Looking for an vertex with degree = 1
-    auto range_verts = boost::vertices(g_prime);
-    for (auto i = range_verts.first;
-         i != range_verts.second && found_one_degree == false;
-         ++i) {
-      auto degree = boost::out_degree(*i, g_prime);
-      if (degree == 1) {
-        Graph::edge_descriptor edge = *(boost::out_edges(*i, g_prime).first);
-        auto target = boost::target(edge, g_prime);
-        g_prime[*i].m_port = VertexProperties::Port::PortAB;
-        ++number_of_AB;
-        std::for_each(boost::out_edges(target, g_prime).first,
-                      boost::out_edges(target, g_prime).second,
-                      [&edges_in_g_prime](const Graph::edge_descriptor& e) {
-                        edges_in_g_prime[e] = false;
-                      });
-        found_one_degree = true;
-      }
-    }
-    if (found_one_degree == false) {
-      // Non ho trovato vertici con degree uguali a 1
-      // Quindi cerco quello massimo e lo poto!
-      size_t num_degree_max = 0;
-      Graph::vertex_descriptor max_vertex_degree;
-      for (auto i = boost::vertices(g_prime).first;
-           i != boost::vertices(g_prime).second;
-           ++i) {
-        auto degree = boost::out_degree(*i, g_prime);
-        if (degree > num_degree_max) {
-          num_degree_max = degree;
-          max_vertex_degree = *i;
-        }
-      }
-      if (num_degree_max > 0) {
-        // Ho trovato il massimo, lo aggiunto al coverset e lo  poto!
-        g_prime[max_vertex_degree].m_port = VertexProperties::Port::PortAB;
-        ++number_of_AB;
-        std::for_each(boost::out_edges(max_vertex_degree, g_prime).first,
-                      boost::out_edges(max_vertex_degree, g_prime).second,
-                      [&edges_in_g_prime]
-                      (const Graph::edge_descriptor& e) {
-                        edges_in_g_prime[e] = false;
-                      });
-      } else {
-        // Non ho trovato massimo => non ci sono edges
-        g_prime_empty = true;
-      }
-    }
-  }
-  return number_of_AB;
-}
-
-void PAP_BCO_Solver::print_all_vertices_and_ports(std::ostream* os)
-    const noexcept {
-  if (os == nullptr) return;
-  auto its = boost::vertices(m_graph);
-  for (auto i = its.first; i != its.second; ++i) {
-    *os << "Vertex (" << *i << "): ---> ";
-    switch (m_graph[*i].m_port) {
-      case VertexProperties::Port::PortA:
-        *os << "Port A";
-        break;
-      case VertexProperties::Port::PortB:
-        *os << "Port B";
-        break;
-      case VertexProperties::Port::PortAB:
-        *os << "Port AB";
-        break;
-      case VertexProperties::Port::UnAssigned:
-        *os << "Unassigned!";
-    }
-    *os << '\n';
-  }
-}
-
-void PAP_BCO_Solver::assign_edges_property_byTree(
-    const SpanningTree<Graph>& st) {
-  // Set all edges to not belog the spanning tree
-  // TODO(biagio): this could be useless because default constructor
-  std::for_each(boost::edges(m_graph).first,
-                boost::edges(m_graph).second,
-                [this](Graph::edge_descriptor e) {
-                  m_graph[e].m_intree = false;
-                  m_graph[e].m_odd = false;
-                });
-
-  // Set in spanning tree property
-  for (const auto& node : st.getMap()) {
-    std::for_each(boost::out_edges(node.first, m_graph).first,
-                  boost::out_edges(node.first, m_graph).second,
-                  [this, &node](Graph::edge_descriptor e) {
-                    if (boost::target(e, m_graph) == node.second)
-                      m_graph[e].m_intree = true;
-                  });
-  }
-
-  // Set the odd co-tree edge property
-  auto its = boost::edges(m_graph);
-  for (auto i = its.first; i != its.second; ++i) {
-    if (m_graph[*i].m_intree == false) {
-      if (is_odd_cotree_edge(*i, st) == true) {
-        m_graph[*i].m_odd = true;
-      }
-    }
-  }
-}
-
-bool PAP_BCO_Solver::is_odd_cotree_edge(const Graph::edge_descriptor& e,
-                                        const SpanningTree<Graph>& st) const {
-  typedef boost::two_bit_color_map<> color_map_t;
-  typedef std::queue<Graph::vertex_descriptor> open_list_t;
-  static const auto white_t =  boost::color_traits<
-    boost::two_bit_color_type>::white();
-  static const auto black_t =  boost::color_traits<
-    boost::two_bit_color_type>::black();
-  static const auto gray_t =  boost::color_traits<
-    boost::two_bit_color_type>::gray();
-
-  if (m_graph[e].m_intree == true) {
-    std::runtime_error("Cannot verify if an edge is odd when it "
-                       "belogs the tree");
-  }
-  const auto num_vertices = boost::num_vertices(m_graph);
-  color_map_t color_map(num_vertices);
-
-  open_list_t openlist;
-  const auto& root = st.getMap().cbegin()->first;
-  openlist.push(root);
-  boost::put(color_map, root, black_t);
-
-  while (openlist.empty() == false) {
-    const auto& node = openlist.front();
-    auto this_node_color = boost::get(color_map, node);
-    for (auto i = boost::out_edges(node, m_graph).first;
-         i != boost::out_edges(node, m_graph).second;
-         ++i) {
-      if (m_graph[*i].m_intree == true || *i == e) {
-        auto target = boost::target(*i, m_graph);
-        auto color_adjacent = boost::get(color_map, target);
-        if (color_adjacent == white_t) {
-          if (this_node_color == black_t)
-            boost::put(color_map, target, gray_t);
-          else
-            boost::put(color_map, target, black_t);
-          openlist.push(target);
-        } else if (color_adjacent == this_node_color) {
-          return true;
-        }
-      }
-    }
-    openlist.pop();
-  }
-  return false;
 }
 
 }  // namespace pap_solver
