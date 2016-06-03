@@ -139,6 +139,7 @@ void PAP_BCO_Solver::parse_matrix() {
     if (file.fail() == true)
       throw std::invalid_argument(
           "The file '" + m_options.input_filename + "' cannot be open.");
+    is = &file;
   }
 
   auto add_edge_function = [](size_t v1, size_t v2, Graph* g) {
