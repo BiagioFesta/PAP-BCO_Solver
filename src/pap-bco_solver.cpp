@@ -116,7 +116,7 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
     print_header();
 #endif
   }
-  
+
   if (m_options.display_help == true) {
     print_help();
     return;
