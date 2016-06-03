@@ -106,15 +106,17 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
 }
 
 void PAP_BCO_Solver::run(int argc, char* argv[]) {
-#ifndef _DEBUG
-  print_header();
-#endif
-
   if (parse_cmdline_options(argc, argv)) {
     throw std::invalid_argument("Invalid process"
                                 " parsing command line arguments");
   }
 
+  if (m_options.generate_random_matrix == false) {
+#ifndef _DEBUG
+    print_header();
+#endif
+  }
+  
   if (m_options.display_help == true) {
     print_help();
     return;
@@ -135,11 +137,18 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
 
   SpanningTree<Graph> spanning_tree;
   spanning_tree.makeRandom_fromGraph(m_graph, &rnd_eng);
+  std::cout << "---RANDOM SPANNING TREE GENERATED:---\n";
   spanning_tree.print(&std::cout);
+  std::cout << "-------------------------------------\n\n";
+
+
   assign_edges_property_byTree(spanning_tree);
   auto num_AB_vertices = algorithm_assign_port_byTree(spanning_tree);
+
+  std::cout << "---SOLUTION FOUND:---\n";
   print_all_vertices_and_ports(&std::cout);
   std::cout << "Number of portAB: " << num_AB_vertices << '\n';
+  std::cout << "---------------------\n";
 }
 
 void PAP_BCO_Solver::parse_matrix_fromfile() {
