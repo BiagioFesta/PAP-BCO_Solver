@@ -270,9 +270,13 @@ size_t PAP_BCO_Solver::algorithm_assign_port_byTree(
       if (degree == 1) {
         Graph::edge_descriptor edge = *(boost::out_edges(*i, g_prime).first);
         auto target = boost::target(edge, g_prime);
-        g_prime[target].m_port = VertexProperties::Port::PortAB;
+        g_prime[*i].m_port = VertexProperties::Port::PortAB;
         ++number_of_AB;
-        edges_in_g_prime[edge] = false;
+        std::for_each(boost::out_edges(target, g_prime).first,
+                      boost::out_edges(target, g_prime).second,
+                      [&edges_in_g_prime](const Graph::edge_descriptor& e) {
+                        edges_in_g_prime[e] = false;
+                      });
         found_one_degree = true;
       }
     }
@@ -296,7 +300,7 @@ size_t PAP_BCO_Solver::algorithm_assign_port_byTree(
         ++number_of_AB;
         std::for_each(boost::out_edges(max_vertex_degree, g_prime).first,
                       boost::out_edges(max_vertex_degree, g_prime).second,
-                      [&g_prime, &edges_in_g_prime]
+                      [&edges_in_g_prime]
                       (const Graph::edge_descriptor& e) {
                         edges_in_g_prime[e] = false;
                       });
