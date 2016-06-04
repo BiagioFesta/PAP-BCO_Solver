@@ -1,0 +1,7 @@
+model ./ampl.model;
+data ./data.dat;
+
+option solver gurobi;
+solve;
+
+display objective, vA, vB, vAB;
