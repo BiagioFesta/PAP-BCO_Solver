@@ -8,10 +8,12 @@ SET( ${PROJECT_NAME}_MAJOR_VERSION 0 )
 SET( ${PROJECT_NAME}_MINOR_VERSION 0 )
 SET( ${PROJECT_NAME}_PATCH_LEVEL 1 )
 
+# Find Boost Graph
 find_package(Boost COMPONENTS graph)
 link_directories(${Boost_LIBRARY_DIRS})
 include_directories(BEFORE ${Boost_INCLUDE_DIRS})
 
+# Exec
 add_executable(${PROJECT_NAME} "./src/pap-bco_solver.cpp")
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU"   OR   "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
@@ -30,4 +32,8 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU"   OR   "${CMAKE_CXX_COMPILER_ID}" M
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -D_DEBUG")
 endif()
 
-
+# Option for testing
+option(BUILD_TEST "Build testing projects" OFF)
+if (BUILD_TEST)
+   add_subdirectory(test)
+endif()
