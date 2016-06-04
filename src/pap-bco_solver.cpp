@@ -28,7 +28,7 @@
 #include <boost/graph/filtered_graph.hpp>
 #include <boost/graph/graph_utility.hpp>
 #include "pap-bco_solver.hpp"
-#include "Algorithm.hpp"
+#include "Engine.hpp"
 
 int main(int argc, char *argv[]) {
   try {
@@ -128,21 +128,8 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
           "\nNumber of edges: " << boost::num_edges(m_graph) << "\n";
       std::cout << "-------------------------------------------\n";
 
-      Algorithm<Graph, std::default_random_engine> solver;
-      solver.set_seed(seed);
-      decltype(solver)::Solution solution;
-      solver.solve(m_graph, &solution);
-
-      std::cout << "--------Spanning Tree Considered-----------\n";
-      decltype(solver)::print_spanning_tree(&std::cout, solution);
-      std::cout << "-------------------------------------------\n";
-      std::cout << "----------------Solution-------------------\n";
-      decltype(solver)::print_solution(&std::cout, solution);
-      std::cout << "Number of vertices on PortAB: " <<
-          solution.m_size_solution << "\n";
-      std::cout << "Time elapsed for the solution: " <<
-          solution.m_time_for_solution.count() << " ms\n";
-      std::cout << "--------------------------------------------\n";
+      Engine<Graph> engine_solver;
+      engine_solver.find_a_solution_and_print(m_graph, &std::cout);
     }
   }
 }
