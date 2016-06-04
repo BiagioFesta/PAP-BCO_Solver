@@ -191,7 +191,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
                 [this, &spanning_tree, &odd_cotree_edges, &graph, &tree_map]
                 (const EdgeType& e) {
                   auto finder = tree_map.find(e);
-                  if (finder == tree_map.cend()) {
+                  if (finder == tree_map.cend() || finder->second == false) {
                     // 'e' is an co-tree edge, we're going to see
                     // whether it's odd or not.
                     if (is_odd_cotree_edge(graph, tree_map, e) == true) {
