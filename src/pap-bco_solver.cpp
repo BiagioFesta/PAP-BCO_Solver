@@ -121,11 +121,18 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
       generate_random_matrix(&rnd_eng);
     } else {
       print_header();
+
       parse_matrix();
+      std::cout << "------------Matrix Information-------------\n";
+      std::cout << "Number of vertices: " << boost::num_vertices(m_graph) <<
+          "\nNumber of edges: " << boost::num_edges(m_graph) << "\n";
+      std::cout << "-------------------------------------------\n";
+
       Algorithm<Graph, std::default_random_engine> solver;
       solver.set_seed(seed);
       decltype(solver)::Solution solution;
       solver.solve(m_graph, &solution);
+
       std::cout << "--------Spanning Tree Considered-----------\n";
       decltype(solver)::print_spanning_tree(&std::cout, solution);
       std::cout << "-------------------------------------------\n";
@@ -182,12 +189,12 @@ void PAP_BCO_Solver::print_help() const noexcept {
       R"##(
 Use: pap-bco_solver [OPTION]... [FILENAME]
    Command Options:
--c, --compresed                : Specify whether the input matrix is a compressed format or not.
--g SIZE[:PERC],
-   --generate SIZE[:PERC]      : Generate a valid random matrix with dimention SIZE.
-                                 PERC is a real number between 0 and 1 and represents
-                                 the probability to generate a 1 in the matrix.
--h, --help                     : Display this guide.
+-c, --compresed                Specify whether the input matrix is a compressed format or not.
+-g SIZE[:PERC], --generate SIZE[:PERC]
+                               Generate a valid random matrix with dimention SIZE.
+                               PERC is a real number between 0 and 1 and represents
+                               the probability to generate a 1 in the matrix.
+-h, --help                     Display this guide.
 
 )##";
 }
