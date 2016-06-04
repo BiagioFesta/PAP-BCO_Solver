@@ -95,6 +95,10 @@ template<typename RND>
 void SpanningTree<Graph>::makeRandom_fromGraph(const Graph& g,
                                                RND* rnd_engine) {
   this->clear();
+  if (boost::num_vertices(g) == 0) {
+    throw std::runtime_error(
+        "The graph has no vertices!");
+  }
   boost::associative_property_map<Map> predecessor_map(m_data_tree);
   boost::random_spanning_tree(g,
                               *rnd_engine,

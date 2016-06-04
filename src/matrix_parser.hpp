@@ -24,6 +24,7 @@
 #include <istream>
 #include <ostream>
 #include <string>
+#include <random>
 
 namespace pap_solver {
 
