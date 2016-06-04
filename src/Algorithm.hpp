@@ -299,8 +299,9 @@ bool Algorithm<Graph, RndGenerator>::is_odd_cotree_edge(
   while (openlist.empty() == false) {
     const auto& node = openlist.front();
     auto this_node_color = get(color_map, node);
-    for (auto i = out_edges(node, cycled_graph).first;
-         i != out_edges(node, cycled_graph).second;
+    auto edges_list = out_edges(node, cycled_graph);
+    for (auto i = edges_list.first;
+         i != edges_list.second;
          ++i) {
       auto target = boost::target(*i, cycled_graph);
       auto color_adjacent = get(color_map, target);
