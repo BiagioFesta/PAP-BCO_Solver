@@ -68,7 +68,7 @@ class SpanningTree {
   void print(std::ostream* os) const;
 
   /// @brief Clean the tree.
-  void clean() noexcept;
+  void clear() noexcept;
 
   /// @return the internal map.
   const Map& getMap() const noexcept { return m_data_tree; }
@@ -86,7 +86,7 @@ SpanningTree<Graph>::SpanningTree() noexcept:
 }
 
 template<typename Graph>
-void SpanningTree<Graph>::clean() noexcept {
+void SpanningTree<Graph>::clear() noexcept {
   m_data_tree.clear();
 }
 
@@ -94,7 +94,7 @@ template<typename Graph>
 template<typename RND>
 void SpanningTree<Graph>::makeRandom_fromGraph(const Graph& g,
                                                RND* rnd_engine) {
-  this->clean();
+  this->clear();
   boost::associative_property_map<Map> predecessor_map(m_data_tree);
   boost::random_spanning_tree(g,
                               *rnd_engine,
@@ -112,9 +112,9 @@ void SpanningTree<Graph>::print(std::ostream* os) const {
 
   for (const auto& node : m_data_tree) {
     if (node.second == sNullVertex) {
-      *os << node. first << " -> " << "[ROOT]" << '\n';
+      *os << "(" << node.first << ") --->  (" << "ROOT)\n";
     } else {
-      *os << node.first << "  ->  " << node.second << '\n';
+      *os << "(" << node.first << ")  ---> (" << node.second << ")\n";
     }
   }
 }

@@ -27,7 +27,6 @@
 #include <map>
 #include <boost/graph/filtered_graph.hpp>
 #include <boost/graph/graph_utility.hpp>
-#include <boost/graph/bipartite.hpp>
 #include "pap-bco_solver.hpp"
 #include "Algorithm.hpp"
 
@@ -125,8 +124,18 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
       parse_matrix();
       Algorithm<Graph, std::default_random_engine> solver;
       solver.set_seed(seed);
-      auto solution = solver.solve(m_graph);
+      decltype(solver)::Solution solution;
+      solver.solve(m_graph, &solution);
+      std::cout << "--------Spanning Tree Considered-----------\n";
+      decltype(solver)::print_spanning_tree(&std::cout, solution);
+      std::cout << "-------------------------------------------\n";
+      std::cout << "----------------Solution-------------------\n";
       decltype(solver)::print_solution(&std::cout, solution);
+      std::cout << "Number of vertices on PortAB: " <<
+          solution.m_size_solution << "\n";
+      std::cout << "Time elapsed for the solution: " <<
+          solution.m_time_for_solution.count() << " ms\n";
+      std::cout << "--------------------------------------------\n";
     }
   }
 }
