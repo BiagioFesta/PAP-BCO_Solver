@@ -190,15 +190,8 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
                 edges(graph).second,
                 [this, &spanning_tree, &odd_cotree_edges, &graph, &tree_map]
                 (const EdgeType& e) {
-                  auto spanningtree_edges = edges(spanning_tree);
-                  auto finder = std::find_if(
-                      spanningtree_edges.first,
-                      spanningtree_edges.second,
-                      [&e](const EdgeType& e_t) {
-                        if (e == e_t) return true;
-                        return false;
-                      });
-                  if (finder == spanningtree_edges.second) {
+                  auto finder = tree_map.find(e);
+                  if (finder == tree_map.cend()) {
                     // 'e' is an co-tree edge, we're going to see
                     // whether it's odd or not.
                     if (is_odd_cotree_edge(graph, tree_map, e) == true) {
