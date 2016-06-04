@@ -42,12 +42,9 @@ template<typename Graph>
 void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
                                               std::ostream* os) {
   AlgorithmDefault algorithm;
-#ifdef _DEBUG
-  algorithm.set_seed(0);
-#else
   algorithm.set_seed(
       std::chrono::system_clock::now().time_since_epoch().count());
-#endif
+
   Solution solution;
   algorithm.solve(graph, &solution);
 
@@ -63,7 +60,7 @@ void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
   *os << "--------------------------------------------\n";
 }
 
-}
+}  // namespace pap_solver
 
 
 #endif  // __PAP_BCO_PARSER__ENGINE__HPP
