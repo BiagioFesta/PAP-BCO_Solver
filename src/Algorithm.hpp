@@ -111,6 +111,10 @@ class Algorithm {
   ///                              the mapped spanning tree and the filter.
   void generate_random_filter_tree(const Graph& graph,
                                    Solution* out_solution);
+
+  template<typename SpanningTreeT>
+  void assign_accordance_spanning_tree(const SpanningTreeT& spanning_tree,
+                                       Solution* out_solution) const;
 };
 
 template<typename Graph, typename RndGenerator>
@@ -161,28 +165,8 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
   // The value to return
   auto& rts = out_solution->m_assignment;
 
-  // First of all, assign each vertex to A or B in according to spanning tree
-  std::for_each(vertices(spanning_tree).first,
-                vertices(spanning_tree).second,
-                [&rts, &spanning_tree](const VertexType& v) {
-                  auto adjacent_list = adjacent_vertices(v, spanning_tree);
-                  auto finder = std::find_if(
-                      adjacent_list.first,
-                      adjacent_list.second,
-                      [&rts](const VertexType& adj) {
-                        auto finder = rts.find(adj);
-                        if (finder == rts.cend()) return false;
-                        if (finder->second == PortAssignment::PortA) {
-                          return true;
-                        }
-                        return false;
-                      });
-                  if (finder != adjacent_list.second) {
-                    rts[v] = PortAssignment::PortB;
-                  } else {
-                    rts[v] = PortAssignment::PortA;
-                  }
-                });
+  // Preliminary assignment in accordance with the spanning tree
+  assign_accordance_spanning_tree(spanning_tree, out_solution);
 
   // Find odd cotree edges
   EdgesMapFilter odd_cotree_edges;
@@ -219,7 +203,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
       if (degree == 1) {
         EdgeType edge = *(out_edges(*i, g_prime).first);
         auto target = boost::target(edge, g_prime);
-        rts[*i] = PortAssignment::PortAB;
+        rts[target] = PortAssignment::PortAB;
         ++number_of_AB;
         std::for_each(out_edges(target, g_prime).first,
                       out_edges(target, g_prime).second,
@@ -389,6 +373,70 @@ void Algorithm<Graph, RndGenerator>::print_spanning_tree(
     std::ostream* os,
     const Solution& solution) {
   solution.m_mapped_spanning_tree.print(os);
+}
+
+template<typename Graph, typename RndGenerator>
+template<typename SpanningTreeT>
+void Algorithm<Graph, RndGenerator>::assign_accordance_spanning_tree(
+    const SpanningTreeT& spanning_tree,
+    Solution* out_solution) const {
+  using boost::vertices;
+  using boost::adjacent_vertices;
+
+  typedef std::queue<VertexType> open_list_t;
+
+  auto& assignment = out_solution->m_assignment;
+
+  // Initialization all vertices are unassigned O(V)
+  const auto vertices_graph = vertices(spanning_tree);
+  std::for_each(vertices_graph.first,
+                vertices_graph.second,
+                [&assignment]
+                (const VertexType& v) {
+                  assignment[v] = PortAssignment::UnAssigned;
+                });
+
+  // Init open list with a root node
+  open_list_t openlist;
+  const auto root = *vertices_graph.first;
+  openlist.push(root);
+  assignment[root] = PortAssignment::PortA;
+
+  while (!openlist.empty()) {
+    const auto& node = openlist.front();
+    const auto& this_assignment = assignment.at(node);
+    auto adjacent_vs = adjacent_vertices(node, spanning_tree);
+    std::for_each(adjacent_vs.first,
+                  adjacent_vs.second,
+                  [&this_assignment, &assignment, &openlist]
+                  (const VertexType& adj_v) {
+                    auto& adj_assignment = assignment.at(adj_v);
+
+                    switch (adj_assignment) {
+                      case PortAssignment::UnAssigned:
+                        if (this_assignment == PortAssignment::PortA) {
+                          adj_assignment = PortAssignment::PortB;
+                        } else {
+                          adj_assignment = PortAssignment::PortA;
+                        }
+                        openlist.push(adj_v);
+                        break;
+
+                      case PortAssignment::PortA:
+                      case PortAssignment::PortB:
+                        if (adj_assignment == this_assignment) {
+                          throw std::runtime_error(
+                              "Malformed spanning tree!");
+                        }
+                        break;
+
+                      default:
+                        throw std::runtime_error(
+                            "Impossibile configuration in the assignment");
+                    }
+                  });
+    openlist.pop();
+  }
 }
 
 }  // namespace pap_solver
