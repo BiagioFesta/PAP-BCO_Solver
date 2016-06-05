@@ -325,6 +325,7 @@ void Algorithm<Graph, RndGenerator>::generate_random_filter_tree(
     const Graph& graph, Solution* out_solution) {
   using boost::out_edges;
   using boost::target;
+  using boost::edges;
 
   auto& mapped_spanning_tree = out_solution->m_mapped_spanning_tree;
   auto& edges_in_spanning_tree = out_solution->m_edges_into_spanning_tree;
@@ -332,7 +333,16 @@ void Algorithm<Graph, RndGenerator>::generate_random_filter_tree(
   mapped_spanning_tree.clear();
   mapped_spanning_tree.makeRandom_fromGraph(graph, &m_rnd_engine);
 
+  // Initialization of map property.
   edges_in_spanning_tree.clear();
+  auto edges_in_graph = edges(graph);
+  std::for_each(edges_in_graph.first,
+                edges_in_graph.second,
+                [&edges_in_spanning_tree]
+                (const EdgeType& e) {
+                  edges_in_spanning_tree[e] = false;
+                });
+
   for (const auto& node : mapped_spanning_tree.getMap()) {
     std::for_each(out_edges(node.first, graph).first,
                   out_edges(node.first, graph).second,
