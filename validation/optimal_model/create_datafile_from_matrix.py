@@ -5,29 +5,29 @@ import subprocess
 
 def generate_matrix():
     rts = ""
-    exe = sys.argv[1]
-    args = " --generate " + sys.argv[2]
-    matrix_size = int(sys.argv[2])
-    proc = subprocess.Popen([exe + args], stdout=subprocess.PIPE, shell=True)
-    result, err = proc.communicate()
-    file = open("matrix.dat", "w")
-    file.write(result.decode("ascii"))
+    file = open(sys.argv[1], "r")
+    result = file.read()
     file.close()
-    result = result.decode("utf-8")
     row = 2
     rts+= "1 "
+    matrix_size = 0
+    current_row = 0
     for c in result:
         if c != '\n':
             rts += c + " "
+            if current_row == 0:
+                matrix_size+=1
         else:
             if row <= matrix_size:
                 rts += c + str(row) + " "
                 row+=1
-    return rts
+                current_row+=1
+    return [rts, matrix_size]
 
+
+matrix_data, size_matrix = generate_matrix()
 
 content = "set V:="
-size_matrix = int(sys.argv[2])
 for i in range(1, size_matrix+1):
     content+=str(i) + " "
 content+= ";\n"
@@ -35,7 +35,7 @@ content+= "param G:  "
 for i in range(1, size_matrix+1):
     content+=str(i) + " "
 content+= ":=\n"
-content+= generate_matrix()
+content+= matrix_data
 
 print(content)
 
