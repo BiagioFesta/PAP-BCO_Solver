@@ -5,7 +5,7 @@ import subprocess
 
 def generate_matrix():
     rts = ""
-    exe = sys.argv[2]
+    exe = sys.argv[1]
     args = " --generate " + sys.argv[2]
     matrix_size = int(sys.argv[2])
     proc = subprocess.Popen([exe + args], stdout=subprocess.PIPE, shell=True)
