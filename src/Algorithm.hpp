@@ -92,7 +92,7 @@ class Algorithm {
   ///
   /// @note Complexity should be O(|V| + |E|).
   static void fundamental_cutset(const Graph& graph,
-                                 Solution* current_solution,
+                                 const Solution& current_solution,
                                  const EdgeType& edge_of_spanning_tree,
                                  EdgeFilter* cutset_output);
 
@@ -174,7 +174,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
 
   // Create a g' considering only odd cotree edges
   FilteredGraph g_prime(
-      graph, PredicateFilterEdge(&odd_cotree_edges));
+      graph, PredicateFilterEdge(odd_cotree_edges));
 
   // Solve odd edges's problem
   bool found_one_degree;
@@ -239,7 +239,7 @@ bool Algorithm<Graph, RndGenerator>::is_odd_cotree_edge(
   edges_in_spanning_tree_plus_e[e_to_test] = true;
 
   FilteredGraph cycled_graph(
-      graph, PredicateFilterEdge(&edges_in_spanning_tree_plus_e));
+      graph, PredicateFilterEdge(edges_in_spanning_tree_plus_e));
 
   typedef boost::two_bit_color_map<> color_map_t;
   typedef std::queue<VertexType> open_list_t;
@@ -370,7 +370,7 @@ void Algorithm<Graph, RndGenerator>::print_solution(
 
 template<typename Graph, typename RndGenerator>
 void Algorithm<Graph, RndGenerator>::fundamental_cutset(
-    const Graph& graph, Solution* current_solution,
+    const Graph& graph, const Solution& current_solution,
     const EdgeType& edge_of_spanning_tree, EdgeFilter* cutset_output) {
   assert(cutset_output != nullptr);
 
@@ -386,7 +386,7 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
   static const auto gray_t =  boost::color_traits<
     boost::two_bit_color_type>::gray();
 
-  const auto& edges_tree = current_solution->
+  const auto& edges_tree = current_solution.
       m_spanning_tree.get_edges_in_spanning_tree();
 
   // Check if edge is in spanning_tree
@@ -406,7 +406,7 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
   const auto num_vertices = boost::num_vertices(graph);
   color_map_t color_map(num_vertices);
   open_list_t openlist;
-  const auto spanning_tree_graph = current_solution->
+  const auto spanning_tree_graph = current_solution.
       m_spanning_tree.get_filtered_graph(graph);
 
   // TODO(biagio): le due colorazioni potrebbero essere parallelizzate
@@ -438,7 +438,7 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
   openlist.push(source);
   while (!openlist.empty()) {
     const auto& node = openlist.front();
-    auto adj_vertices = adjacent_vertices(node, spanning_tree_graph);
+    auto adj_vertices = boost::adjacent_vertices(node, spanning_tree_graph);
     std::for_each(adj_vertices.first,
                   adj_vertices.second,
                   [&target, &color_map, &openlist]

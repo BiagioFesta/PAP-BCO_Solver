@@ -49,14 +49,14 @@ class SpanningTree {
   struct PredicateFilterEdge {
     PredicateFilterEdge() = default;
 
-    explicit PredicateFilterEdge(EdgeFilter* map) :
-        m_edges_map(*map) {
+    explicit PredicateFilterEdge(const EdgeFilter& map) :
+        m_edges_map(map) {
     }
     inline bool operator()(const EdgeType e) const {
       return boost::get(m_edges_map, e);
     }
 
-    boost::associative_property_map<EdgeFilter> m_edges_map;
+    boost::const_associative_property_map<EdgeFilter> m_edges_map;
   };
 
   /// A view on a graph.
@@ -93,7 +93,7 @@ class SpanningTree {
 
   inline const EdgeFilter& get_edges_in_spanning_tree() const noexcept;
 
-  inline const FilteredGraph get_filtered_graph(const Graph& graph);
+  inline const FilteredGraph get_filtered_graph(const Graph& graph) const;
 
  private:
   typedef std::map<VertexType, VertexType> MapVertexParent;
@@ -185,28 +185,7 @@ template<typename Graph>
 void SpanningTree<Graph>::print(const Graph& graph, std::ostream* os) const {
   if (os == nullptr) return;
 
-  const auto verxs = vertices(graph);
-  std::for_each(verxs.first,
-                verxs.second,
-                [this, &os, &graph]
-                (const VertexType& v) {
-                  if (v == 0) {
-                    *os << '(' << v << ") ---> (ROOT)\n";
-                  } else {
-                    const auto& links = out_edges(v, graph);
-                    auto finder = std::find_if(links.first,
-                                               links.second,
-                                               [this]
-                                               (const EdgeType& e) {
-                                                 return m_edges_filter.at(e);
-                                               });
-
-                    if (finder != links.second) {
-                      *os << '(' << v << ") ---> (" <<
-                          target(*finder, graph) << ")\n";
-                    }
-                  }
-                });
+  
 }
 
 template<typename Graph>
@@ -219,8 +198,8 @@ SpanningTree<Graph>::get_edges_in_spanning_tree() const noexcept {
 template<typename Graph>
 inline
 const typename SpanningTree<Graph>::FilteredGraph
-SpanningTree<Graph>::get_filtered_graph(const Graph& graph) {
-  return FilteredGraph(graph, PredicateFilterEdge(&m_edges_filter));
+SpanningTree<Graph>::get_filtered_graph(const Graph& graph) const {
+  return FilteredGraph(graph, PredicateFilterEdge(m_edges_filter));
 }
 
 template<typename Graph>
