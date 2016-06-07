@@ -56,7 +56,7 @@ void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
   algorithm.solve(graph, &solution);
 
   *os << "--------Spanning Tree Considered-----------\n";
-  // TODO(biagio): print spanning tree
+  solution.m_spanning_tree.print(os);
   *os << "-------------------------------------------\n";
   *os << "----------------Solution-------------------\n";
   AlgorithmDefault::print_solution(os, solution);
