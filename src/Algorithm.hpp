@@ -101,6 +101,9 @@ class Algorithm {
 
   void solve_problem(const Graph& graph, Solution* out_solution);
 
+  static void find_all_odd_cotree_edges(const Graph& graph,
+                                        const EdgeFilter& edges_in_tree,
+                                        EdgeFilter* odd_edges);
 
   static bool is_odd_cotree_edge(const Graph& graph,
                                  const EdgeFilter& edges_in_spanning_tree,
@@ -156,21 +159,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
   const auto& edges_in_spanning_tree =
       out_solution->m_spanning_tree.get_edges_in_spanning_tree();
   EdgeFilter odd_cotree_edges;
-  std::for_each(edges(graph).first,
-                edges(graph).second,
-                [&graph, &odd_cotree_edges, &edges_in_spanning_tree]
-                (const EdgeType& e) {
-                  const auto finder = edges_in_spanning_tree.find(e);
-                  if (finder == edges_in_spanning_tree.cend() ||
-                      finder->second == false) {
-                    // 'e' is an co-tree edge, we're going to see
-                    // whether it's odd or not.
-                    if (Algorithm::is_odd_cotree_edge(
-                            graph, edges_in_spanning_tree, e) == true) {
-                      odd_cotree_edges[e] = true;
-                    }
-                  }
-                });
+  find_all_odd_cotree_edges(graph, edges_in_spanning_tree, &odd_cotree_edges);
 
   // Create a g' considering only odd cotree edges
   FilteredGraph g_prime(
@@ -469,6 +458,28 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
                     edges_in_cutset[e] = true;
                   } else {
                     edges_in_cutset[e]= false;
+                  }
+                });
+}
+
+template<typename Graph, typename RndGenerator>
+void Algorithm<Graph, RndGenerator>::find_all_odd_cotree_edges(
+    const Graph& graph,
+    const EdgeFilter& edges_in_tree,
+    EdgeFilter* odd_edges) {
+  assert(odd_edges != nullptr);
+
+  EdgeFilter odd_cotree_edges = *odd_edges;
+  std::for_each(edges(graph).first,
+                edges(graph).second,
+                [&graph, &odd_cotree_edges, &edges_in_tree]
+                (const EdgeType& e) {
+                  const auto finder = edges_in_tree.find(e);
+                  if (edges_in_tree.at(e) == false) {
+                    odd_cotree_edges[e] =
+                         Algorithm::is_odd_cotree_edge(graph,
+                                                       edges_in_tree,
+                                                       e);
                   }
                 });
 }
