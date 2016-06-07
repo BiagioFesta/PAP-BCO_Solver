@@ -75,13 +75,6 @@ class SpanningTree {
   void generate_rnd_spanning_tree(const Graph& graph,
                                   RandomEngine* rnd_engine);
 
-  /// @brief Print the subtree with the notation:
-  ///                   (VERTEX)  ->  (vertex PARENT)
-  ///                             ...
-  ///
-  /// @param os [out]   The output stream wehere the subtree
-  ///                   will be printed.
-  ///
   void print(const Graph& graph, std::ostream* os) const;
 
   /// @brief Clean the tree.
