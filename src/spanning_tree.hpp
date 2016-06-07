@@ -26,6 +26,7 @@
 #include <type_traits>
 #include <boost/graph/random_spanning_tree.hpp>
 #include <boost/graph/filtered_graph.hpp>
+#include "GraphUtility.hpp"
 
 namespace pap_solver {
 
@@ -111,6 +112,8 @@ class SpanningTree {
   static void makeFilterFromMap(const Graph& graph,
                                 const MapVertexParent& input_map,
                                 EdgeFilter* output_filter);
+
+  bool this_is_a_valid_spanning_tree(const Graph& graph);
 };
 
 template <typename Graph>
@@ -122,6 +125,8 @@ void SpanningTree<Graph>::generate_rnd_spanning_tree(const Graph& graph,
   clear();
   makeMappedFromGraph(graph, rnd_engine, &m_mapped_spanning_tree);
   makeFilterFromMap(graph, m_mapped_spanning_tree, &m_edges_filter);
+
+  assert(this_is_a_valid_spanning_tree(graph) == true);
 }
 
 template<typename Graph>
@@ -218,6 +223,34 @@ SpanningTree<Graph>::get_filtered_graph(const Graph& graph) {
   return FilteredGraph(graph, PredicateFilterEdge(&m_edges_filter));
 }
 
+template<typename Graph>
+bool SpanningTree<Graph>::this_is_a_valid_spanning_tree(
+    const Graph& graph) {
+  // A valid spanning tree must have no cycle and all vertices
+  const auto filtered_graph = get_filtered_graph(graph);
+
+  // Check whether the spanning tree has all vertices
+  const auto g_vertx = vertices(filtered_graph);
+
+  // Find a vertex in the spanning tree which don't belong the map
+  auto finder = std::find_if(g_vertx.first,
+                             g_vertx.second,
+                             [this](const VertexType& v) {
+                               const auto finder =
+                               m_mapped_spanning_tree.find(v);
+                               if (finder == m_mapped_spanning_tree.cend()) {
+                                 return true;
+                               }
+                               return false;
+                             });
+  if (finder != g_vertx.second) {
+    return false;
+  }
+
+  // Check whether the spanning tree contains loops.
+  return GraphUtility::graph_contains_loop(filtered_graph) ?
+      false : true;
+}
 
 }  // namespace pap_solver
 
