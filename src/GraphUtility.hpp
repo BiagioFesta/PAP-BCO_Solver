@@ -32,7 +32,7 @@ class GraphUtility {
 };
 
 template<typename Graph>
-bool GraphUtility::graph_contains_loop<Graph>(const Graph& graph) {
+bool GraphUtility::graph_contains_loop(const Graph& graph) {
   // Type definitions
   typedef typename Graph::vertex_descriptor VertexType;
   typedef typename Graph::edge_descriptor EdgeType;
