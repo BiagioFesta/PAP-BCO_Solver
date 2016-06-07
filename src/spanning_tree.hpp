@@ -182,8 +182,19 @@ void SpanningTree<Graph>::makeFilterFromMap(const Graph& graph,
 
 template<typename Graph>
 void SpanningTree<Graph>::print(std::ostream* os) const {
-  assert(os != nullptr);
-  // TODO(biagio): to implement
+  if (os == nullptr) return;
+
+  if (m_mapped_spanning_tree.size() == 0) {
+    *os << "Spanning Tree is empty!\n";
+  } else {
+    for (const auto& node : m_mapped_spanning_tree) {
+      if (node.second == sNullVertex) {
+        *os << "(" << node.first << ") --->  (" << "ROOT)\n";
+      } else {
+        *os << "(" << node.first << ")  ---> (" << node.second << ")\n";
+      }
+    }
+  }
 }
 
 template<typename Graph>
