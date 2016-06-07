@@ -25,6 +25,7 @@
 #include <ostream>
 #include <type_traits>
 #include <boost/graph/random_spanning_tree.hpp>
+#include <boost/graph/filtered_graph.hpp>
 
 namespace pap_solver {
 
@@ -39,24 +40,46 @@ class SpanningTree {
   /// A edge type of the graph.
   typedef typename Graph::edge_descriptor EdgeType;
 
-  /// An associative container with <key,value> VertexType.
-  typedef std::map<VertexType, VertexType> Map;
+  /// An associative container for each vertex it returns its parent.
+  typedef std::map<VertexType, VertexType> MapVertexParent;
+
+  /// An associative container for each edges it returns if in spanning tree.
+  typedef std::map<EdgeType, bool> EdgeFilter;
+
+  /// @brief A predicate (function object) which return
+  ///        whether an edge belongs to the filtered graph or not.
+  struct PredicateFilterEdge {
+    PredicateFilterEdge() = default;
+
+    explicit PredicateFilterEdge(EdgeFilter* map) :
+        m_edges_map(*map) {
+    }
+    inline bool operator()(const EdgeType e) const {
+      return boost::get(m_edges_map, e);
+    }
+
+    boost::associative_property_map<EdgeFilter> m_edges_map;
+  };
+
+  /// A view on a graph.
+  typedef boost::filtered_graph<Graph, PredicateFilterEdge> FilteredGraph;
+
+
+  /// A null vertex. The parent of the root will be equal to this.
+  const VertexType sNullVertex = Graph::null_vertex();
 
   static_assert(std::is_integral<VertexType>::value,
                 "The vertex type (descriptor) must to be a integer type!");
 
   /// @brief Default constructor.
-  SpanningTree() noexcept;
+  SpanningTree() = default;
 
-  /// @brief Create a spanning tree with a random approach.
-  ///
-  /// @param [in] g           The starting graph.
-  /// @param rnd_engine       A valid random engine.
-  ///
-  /// @note The graph must to have all edges with unitary cost.
-  /// @note The root of the tree will be the first vertex of the graph.
-  template<typename RND>
-  void makeRandom_fromGraph(const Graph& g, RND* rnd_engine);
+  /// @brief Default destructor.
+  ~SpanningTree() = default;
+
+  template<typename RandomEngine>
+  void generate_rnd_spanning_tree(const Graph& graph,
+                                  RandomEngine* rnd_engine);
 
   /// @brief Print the subtree with the notation:
   ///                   (VERTEX)  ->  (vertex PARENT)
@@ -70,59 +93,119 @@ class SpanningTree {
   /// @brief Clean the tree.
   void clear() noexcept;
 
-  /// @return the internal map.
-  const Map& getMap() const noexcept { return m_data_tree; }
+  inline const MapVertexParent& get_mapped_spanning_tree() const noexcept;
+
+  inline const EdgeFilter& get_edges_in_spanning_tree() const noexcept;
+
+  inline const FilteredGraph get_filtered_graph(const Graph& graph);
 
  private:
-  Map m_data_tree;
+  MapVertexParent m_mapped_spanning_tree;
+  EdgeFilter m_edges_filter;
 
-  /// A null vertex. The parent of the root will be equal to this.
-  VertexType sNullVertex;
+  template<typename RND>
+  static void makeMappedFromGraph(const Graph& graph,
+                                  RND* rnd_engine,
+                                  MapVertexParent* output_map);
+
+  static void makeFilterFromMap(const Graph& graph,
+                                const MapVertexParent& input_map,
+                                EdgeFilter* output_filter);
 };
 
-template<typename Graph>
-SpanningTree<Graph>::SpanningTree() noexcept:
-                                     sNullVertex(Graph::null_vertex()) {
+template <typename Graph>
+template<typename RandomEngine>
+void SpanningTree<Graph>::generate_rnd_spanning_tree(const Graph& graph,
+                                                     RandomEngine* rnd_engine) {
+  assert(rnd_engine != nullptr);
+
+  clear();
+  makeMappedFromGraph(graph, rnd_engine, &m_mapped_spanning_tree);
+  makeFilterFromMap(graph, m_mapped_spanning_tree, &m_edges_filter);
 }
 
 template<typename Graph>
 void SpanningTree<Graph>::clear() noexcept {
-  m_data_tree.clear();
+  m_mapped_spanning_tree.clear();
+  m_edges_filter.clear();
 }
 
 template<typename Graph>
 template<typename RND>
-void SpanningTree<Graph>::makeRandom_fromGraph(const Graph& g,
-                                               RND* rnd_engine) {
-  this->clear();
-  if (boost::num_vertices(g) == 0) {
-    throw std::runtime_error(
-        "The graph has no vertices!");
+void SpanningTree<Graph>::makeMappedFromGraph(const Graph& graph,
+                                              RND* rnd_engine,
+                                              MapVertexParent* output_map) {
+  assert(output_map != nullptr && rnd_engine != nullptr);
+
+  output_map->clear();
+  if (boost::num_vertices(graph) == 0) {
+    throw std::runtime_error("The graph has no vertices!");
   }
-  boost::associative_property_map<Map> predecessor_map(m_data_tree);
-  boost::random_spanning_tree(g,
+
+  boost::associative_property_map<MapVertexParent> predecessor_map(*output_map);
+  boost::random_spanning_tree(graph,
                               *rnd_engine,
                               boost::predecessor_map(predecessor_map).
                               vertex_index_map(boost::identity_property_map()));
-  if (m_data_tree.begin()->second != sNullVertex) {
-    throw std::runtime_error("I cannot create a proper spanning tree. "
-                             "The first vertex is not the root!");
+}
+
+template<typename Graph>
+void SpanningTree<Graph>::makeFilterFromMap(const Graph& graph,
+                                            const MapVertexParent& input_map,
+                                            EdgeFilter* output_filter) {
+  assert(output_filter != nullptr);
+
+  auto& edges_in_spanning_tree = *output_filter;
+
+  // Initialization (all false)
+  output_filter->clear();
+  auto edges_in_graph = edges(graph);
+  std::for_each(edges_in_graph.first,
+                edges_in_graph.second,
+                [&edges_in_spanning_tree]
+                (const EdgeType& e) {
+                  edges_in_spanning_tree[e] = false;
+                });
+
+  // TODO(biagio): could be improved
+  for (const auto& node : input_map) {
+    const auto edges_from_this = out_edges(node.first, graph);
+    std::for_each(edges_from_this.first,
+                  edges_from_this.second,
+                  [&edges_in_spanning_tree, &node, &graph]
+                  (const EdgeType& e) {
+                    if (target(e, graph) == node.second)
+                      edges_in_spanning_tree[e] = true;
+                  });
   }
 }
 
 template<typename Graph>
 void SpanningTree<Graph>::print(std::ostream* os) const {
-  if (os == nullptr || m_data_tree.size() == 0) return;
-
-  for (const auto& node : m_data_tree) {
-    if (node.second == sNullVertex) {
-      *os << "(" << node.first << ") --->  (" << "ROOT)\n";
-    } else {
-      *os << "(" << node.first << ")  ---> (" << node.second << ")\n";
-    }
-  }
+  assert(os != nullptr);
+  // TODO(biagio): to implement
 }
 
+template<typename Graph>
+inline
+const typename SpanningTree<Graph>::MapVertexParent&
+SpanningTree<Graph>::get_mapped_spanning_tree() const noexcept {
+  return m_mapped_spanning_tree;
+}
+
+template<typename Graph>
+inline
+const typename SpanningTree<Graph>::EdgeFilter&
+SpanningTree<Graph>::get_edges_in_spanning_tree() const noexcept {
+  return m_edges_filter;
+}
+
+template<typename Graph>
+inline
+const typename SpanningTree<Graph>::FilteredGraph
+SpanningTree<Graph>::get_filtered_graph(const Graph& graph) {
+  return FilteredGraph(graph, PredicateFilterEdge(&m_edges_filter));
+}
 
 
 }  // namespace pap_solver

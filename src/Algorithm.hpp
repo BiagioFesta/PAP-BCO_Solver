@@ -27,8 +27,6 @@
 #include <utility>
 #include <chrono>
 #include "spanning_tree.hpp"
-#include <boost/graph/filtered_graph.hpp>
-
 
 namespace pap_solver {
 
@@ -49,42 +47,33 @@ class Algorithm {
   /// @brief Edge Descriptor
   typedef typename Graph::edge_descriptor EdgeType;
 
-  /// @brief A predicate (function object) which return
-  ///        whether an edge belongs to the filtered graph or not.
-  template<typename AssociativeMap>
-  struct PredicateFilterEdge {
-    typedef boost::associative_property_map<AssociativeMap> edge_list_t;
-
-    PredicateFilterEdge() = default;
-    explicit PredicateFilterEdge(AssociativeMap* map) :
-        m_edges_list(*map) {
-    }
-    bool operator()(const EdgeType e) const {
-      return boost::get(m_edges_list, e);
-    }
-    edge_list_t m_edges_list;
-  };
-
   /// @brief An map assignment.
   typedef std::map<VertexType, PortAssignment> MapAssignment;
 
-  /// @brief A filter on edges. Whether they belong to the filtered
-  ///        graph or no.
-  typedef std::map<EdgeType, bool> EdgesMapFilter;
+  /// @brief Spanning Tree of Graph type.
+  typedef SpanningTree<Graph> SpanningTreeT;
+
+  /// @brief A map<EdgeType, bool> filter.
+  typedef typename SpanningTree<Graph>::EdgeFilter EdgeFilter;
+
+  /// @brief A predicate for EdgeFilter
+  typedef typename SpanningTree<Graph>::PredicateFilterEdge PredicateFilterEdge;
+
+  /// @brief A view on a graph.
+  typedef typename SpanningTree<Graph>::FilteredGraph FilteredGraph;
 
   /// @brief A struct with the solution and some its details.
   struct Solution {
     MapAssignment m_assignment;
     size_t m_size_solution;
-    SpanningTree<Graph> m_mapped_spanning_tree;
-    EdgesMapFilter m_edges_into_spanning_tree;
+    SpanningTree<Graph> m_spanning_tree;
     std::chrono::milliseconds m_time_for_solution;
   };
 
   /// @brief Default constructor.
   Algorithm() = default;
 
-  bool solve(const Graph& graph, Solution* out_solution);
+  void solve(const Graph& graph, Solution* out_solution);
 
   /// @brief Sets the seed for the random engine.
   void set_seed(int seed);
@@ -92,125 +81,88 @@ class Algorithm {
   static void print_solution(std::ostream* os,
                              const Solution& solution);
 
-  static void print_spanning_tree(std::ostream* os,
-                                  const Solution& solution);
-
 
  private:
   RndGenerator m_rnd_engine;
 
-  /// @brief Solve the port assignment problem.
+  void solve_problem(const Graph& graph, Solution* out_solution);
+
+
+  static bool is_odd_cotree_edge(const Graph& graph,
+                                 const EdgeFilter& edges_in_spanning_tree,
+                                 const EdgeType& e_to_test);
+
+  /// TODO(biagio): comment
   ///
-  /// @param [in] graph          A valid graph.
-  /// @param [in] spanning_tree  A valid spanning tree from that graph.
-  /// @param [in] tree_map       A filter which describes which vertices
-  ///                            belong to the spanning tree.
-  /// @param [out] out_solution  It fills the solution's fields assignment and
-  ///                            size of solution.
-  template<typename SpanningTreeT>
-  void solve_problem(const Graph& graph,
-                     const SpanningTreeT& spanning_tree,
-                     const EdgesMapFilter& tree_map,
-                     Solution* out_solution) const;
-
-  /// @param [in] graph       A valid graph.
-  /// @param [in] tree_map    A filter which described which vertices
-  ///                         belong to the spanning tree.
-  /// @param [in] e_to_test   The edge you want to test.
+  /// @param [in] graph               The main graph.
+  /// @param [in,out] out_solution    The solution where the output will
+  ///                                 be stored.
   ///
-  /// @return 'true' if the edge is a odd co-tree edge, 'false'
-  //          otherwise.
-  /// @note 'e_to_test' MUST to be an co-tree edge. The check won't
-  ///        performed by the function!
-  bool is_odd_cotree_edge(const Graph& graph,
-                          const EdgesMapFilter& tree_map,
-                          const EdgeType& e_to_test) const;
-
-  /// @brief Generate a filter for a random spanning tree.
-  /// @param [in] graph            A valid graph.
-  /// @param [out] out_solution    It fills the solution's fields
-  ///                              the mapped spanning tree and the filter.
-  void generate_random_filter_tree(const Graph& graph,
-                                   Solution* out_solution);
-
-  template<typename SpanningTreeT>
-  void assign_accordance_spanning_tree(const SpanningTreeT& spanning_tree,
-                                       Solution* out_solution) const;
+  /// @note The spanning tree in the solution must to be already generated.
+  static void assign_accordance_spanning_tree(
+      const Graph& graph,
+      Solution* out_solution);
 };
 
 template<typename Graph, typename RndGenerator>
-bool Algorithm<Graph, RndGenerator>::solve(
-    const Graph& graph, Solution* out_solution) {
-  typedef boost::filtered_graph<
-    Graph, PredicateFilterEdge<EdgesMapFilter>> FilteredGraph;
-
-  auto time_start = std::chrono::steady_clock::now();
-
-  if (out_solution == nullptr) {
-    auto time_stop = std::chrono::steady_clock::now();
-    out_solution->m_time_for_solution =
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-        time_stop - time_start);
-    return false;
-  }
-
-  generate_random_filter_tree(graph, out_solution);
-  EdgesMapFilter& spanning_tree_map =
-      out_solution->m_edges_into_spanning_tree;
-
-  PredicateFilterEdge<EdgesMapFilter>
-      predicate_spanning_tree(&spanning_tree_map);
-  FilteredGraph spanning_tree(graph, predicate_spanning_tree);
-
-  solve_problem(graph, spanning_tree, spanning_tree_map, out_solution);
-
-  auto time_stop = std::chrono::steady_clock::now();
-  out_solution->m_time_for_solution =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-      time_stop - time_start);
-
-  return true;
+void Algorithm<Graph, RndGenerator>::set_seed(int seed) {
+  m_rnd_engine.seed(seed);
 }
 
 template<typename Graph, typename RndGenerator>
-template<typename SpanningTreeT>
-void Algorithm<Graph, RndGenerator>::solve_problem(
+void Algorithm<Graph, RndGenerator>::solve(
     const Graph& graph,
-    const SpanningTreeT& spanning_tree,
-    const EdgesMapFilter& tree_map,
-    Solution* out_solution) const {
-  using boost::vertices;
-  using boost::edges;
-  using boost::adjacent_vertices;
+    Solution* out_solution) {
+  assert(out_solution != nullptr);
 
-  // The value to return
-  auto& rts = out_solution->m_assignment;
+  auto time_start = std::chrono::steady_clock::now();
+  solve_problem(graph, out_solution);
+  auto time_stop = std::chrono::steady_clock::now();
 
-  // Preliminary assignment in accordance with the spanning tree
-  assign_accordance_spanning_tree(spanning_tree, out_solution);
+  out_solution->m_time_for_solution =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+      time_stop - time_start);
+}
+
+template<typename Graph, typename RndGenerator>
+void Algorithm<Graph, RndGenerator>::solve_problem(
+    const Graph& graph, Solution* out_solution) {
+  assert(out_solution != nullptr);
+
+  auto& assignment = out_solution->m_assignment;
+
+  // Generate the spanning tree
+  out_solution->m_spanning_tree.generate_rnd_spanning_tree(graph,
+                                                           &m_rnd_engine);
+
+  // Preliminary assignment in according to the spanning tree
+  Algorithm::assign_accordance_spanning_tree(graph, out_solution);
 
   // Find odd cotree edges
-  EdgesMapFilter odd_cotree_edges;
+  const auto& edges_in_spanning_tree =
+      out_solution->m_spanning_tree.get_edges_in_spanning_tree();
+  EdgeFilter odd_cotree_edges;
   std::for_each(edges(graph).first,
                 edges(graph).second,
-                [this, &spanning_tree, &odd_cotree_edges, &graph, &tree_map]
+                [&graph, &odd_cotree_edges, &edges_in_spanning_tree]
                 (const EdgeType& e) {
-                  auto finder = tree_map.find(e);
-                  if (finder == tree_map.cend() || finder->second == false) {
+                  const auto finder = edges_in_spanning_tree.find(e);
+                  if (finder == edges_in_spanning_tree.cend() ||
+                      finder->second == false) {
                     // 'e' is an co-tree edge, we're going to see
                     // whether it's odd or not.
-                    if (is_odd_cotree_edge(graph, tree_map, e) == true) {
+                    if (Algorithm::is_odd_cotree_edge(
+                            graph, edges_in_spanning_tree, e) == true) {
                       odd_cotree_edges[e] = true;
                     }
                   }
                 });
 
-  // Create a g' considering only odd cotree edges.
-  PredicateFilterEdge<decltype(odd_cotree_edges)>
-      predicate_odd_cotree_edges(&odd_cotree_edges);
-  boost::filtered_graph<Graph, decltype(predicate_odd_cotree_edges)>
-      g_prime(graph, predicate_odd_cotree_edges);
+  // Create a g' considering only odd cotree edges
+  FilteredGraph g_prime(
+      graph, PredicateFilterEdge(&odd_cotree_edges));
 
+  // Solve odd edges's problem
   bool found_one_degree;
   bool g_prime_empty = false;
   size_t number_of_AB = 0;
@@ -224,7 +176,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
       if (degree == 1) {
         EdgeType edge = *(out_edges(*i, g_prime).first);
         auto target = boost::target(edge, g_prime);
-        rts[target] = PortAssignment::PortAB;
+        assignment[target] = PortAssignment::PortAB;
         ++number_of_AB;
         std::for_each(out_edges(target, g_prime).first,
                       out_edges(target, g_prime).second,
@@ -248,7 +200,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
         }
       }
       if (num_degree_max > 0) {
-        rts[max_vertex_degree] = PortAssignment::PortAB;
+        assignment[max_vertex_degree] = PortAssignment::PortAB;
         ++number_of_AB;
         std::for_each(out_edges(max_vertex_degree, g_prime).first,
                       out_edges(max_vertex_degree, g_prime).second,
@@ -266,23 +218,14 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
 
 template<typename Graph, typename RndGenerator>
 bool Algorithm<Graph, RndGenerator>::is_odd_cotree_edge(
-    const Graph& graph,
-    const EdgesMapFilter& tree_map,
-    const EdgeType& e_to_test) const {
-  using boost::vertices;
-  using boost::edges;
-  using boost::out_edges;
-  using boost::get;
-  using boost::put;
+    const Graph& graph, const EdgeFilter& edges_in_spanning_tree,
+    const EdgeType& e_to_test) {
 
-  EdgesMapFilter edges_in_spanning_tree_plus_e = tree_map;
+  auto edges_in_spanning_tree_plus_e = edges_in_spanning_tree;
   edges_in_spanning_tree_plus_e[e_to_test] = true;
 
-  PredicateFilterEdge<decltype(edges_in_spanning_tree_plus_e)>
-      predicate_spanning_tree_plus_e(&edges_in_spanning_tree_plus_e);
-  boost::filtered_graph<Graph, decltype(predicate_spanning_tree_plus_e)>
-      cycled_graph(graph, predicate_spanning_tree_plus_e);
-
+  FilteredGraph cycled_graph(
+      graph, PredicateFilterEdge(&edges_in_spanning_tree_plus_e));
 
   typedef boost::two_bit_color_map<> color_map_t;
   typedef std::queue<VertexType> open_list_t;
@@ -326,87 +269,13 @@ bool Algorithm<Graph, RndGenerator>::is_odd_cotree_edge(
 }
 
 template<typename Graph, typename RndGenerator>
-void Algorithm<Graph, RndGenerator>::generate_random_filter_tree(
-    const Graph& graph, Solution* out_solution) {
-  using boost::out_edges;
-  using boost::target;
-  using boost::edges;
-
-  auto& mapped_spanning_tree = out_solution->m_mapped_spanning_tree;
-  auto& edges_in_spanning_tree = out_solution->m_edges_into_spanning_tree;
-
-  mapped_spanning_tree.clear();
-  mapped_spanning_tree.makeRandom_fromGraph(graph, &m_rnd_engine);
-
-  // Initialization of map property.
-  edges_in_spanning_tree.clear();
-  auto edges_in_graph = edges(graph);
-  std::for_each(edges_in_graph.first,
-                edges_in_graph.second,
-                [&edges_in_spanning_tree]
-                (const EdgeType& e) {
-                  edges_in_spanning_tree[e] = false;
-                });
-
-  for (const auto& node : mapped_spanning_tree.getMap()) {
-    std::for_each(out_edges(node.first, graph).first,
-                  out_edges(node.first, graph).second,
-                  [&edges_in_spanning_tree, &node, &graph]
-                  (const EdgeType& e) {
-                    if (target(e, graph) == node.second)
-                      edges_in_spanning_tree[e] = true;
-                  });
-  }
-}
-
-template<typename Graph, typename RndGenerator>
-void Algorithm<Graph, RndGenerator>::set_seed(int seed) {
-  m_rnd_engine.seed(seed);
-}
-
-template<typename Graph, typename RndGenerator>
-void Algorithm<Graph, RndGenerator>::print_solution(
-    std::ostream* os,
-    const Solution& solution) {
-  if (os == nullptr) return;
-  for (const auto& assignment : solution.m_assignment) {
-    *os << "Vertex (" << assignment.first << ") ---> ";
-    switch (assignment.second) {
-      case PortAssignment::PortA:
-        *os << "Port A";
-        break;
-      case PortAssignment::PortB:
-        *os << "Port B";
-        break;
-      case PortAssignment::PortAB:
-        *os << "Port AB";
-        break;
-      default:
-        *os << "Unassigned!";
-        break;
-    }
-    *os << '\n';
-  }
-}
-
-template<typename Graph, typename RndGenerator>
-void Algorithm<Graph, RndGenerator>::print_spanning_tree(
-    std::ostream* os,
-    const Solution& solution) {
-  solution.m_mapped_spanning_tree.print(os);
-}
-
-template<typename Graph, typename RndGenerator>
-template<typename SpanningTreeT>
 void Algorithm<Graph, RndGenerator>::assign_accordance_spanning_tree(
-    const SpanningTreeT& spanning_tree,
-    Solution* out_solution) const {
-  using boost::vertices;
-  using boost::adjacent_vertices;
-
+    const Graph& graph, Solution* out_solution) {
   typedef std::queue<VertexType> open_list_t;
 
   auto& assignment = out_solution->m_assignment;
+  const auto& spanning_tree =
+      out_solution->m_spanning_tree.get_filtered_graph(graph);
 
   // Initialization all vertices are unassigned O(V)
   const auto vertices_graph = vertices(spanning_tree);
@@ -417,7 +286,7 @@ void Algorithm<Graph, RndGenerator>::assign_accordance_spanning_tree(
                   assignment[v] = PortAssignment::UnAssigned;
                 });
 
-  // Init open list with a root node
+    // Init open list with a root node
   open_list_t openlist;
   const auto root = *vertices_graph.first;
   openlist.push(root);
@@ -459,6 +328,32 @@ void Algorithm<Graph, RndGenerator>::assign_accordance_spanning_tree(
     openlist.pop();
   }
 }
+
+template<typename Graph, typename RndGenerator>
+void Algorithm<Graph, RndGenerator>::print_solution(
+    std::ostream* os, const Solution& solution) {
+  assert(os != nullptr);
+
+  for (const auto& assignment : solution.m_assignment) {
+    *os << "Vertex (" << assignment.first << ") ---> ";
+    switch (assignment.second) {
+      case PortAssignment::PortA:
+        *os << "Port A";
+        break;
+      case PortAssignment::PortB:
+        *os << "Port B";
+        break;
+      case PortAssignment::PortAB:
+        *os << "Port AB";
+        break;
+      default:
+        *os << "Unassigned!";
+        break;
+    }
+    *os << '\n';
+  }
+}
+
 
 }  // namespace pap_solver
 
