@@ -81,6 +81,16 @@ class Algorithm {
   static void print_solution(std::ostream* os,
                              const Solution& solution);
 
+  /// @brief Compute the cutset for the edges which don't belong
+  ///        to the spanning tree.
+  ///
+  /// @param [in] graph                  The main graph
+  /// @param [in]current_solution        The solution found
+  /// @param edge_of_spanning_tree       The edge which perform on the
+  ///                                    cut set. Must to be in tree.
+  /// @param cutset_output               The result.
+  ///
+  /// @note Complexity should be O(|V| + |E|).
   static void fundamental_cutset(const Graph& graph,
                                  Solution* current_solution,
                                  const EdgeType& edge_of_spanning_tree,
@@ -363,7 +373,7 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
     const Graph& graph, Solution* current_solution,
     const EdgeType& edge_of_spanning_tree, EdgeFilter* cutset_output) {
   assert(cutset_output != nullptr);
-  
+
   // Types definitions
   typedef boost::two_bit_color_map<> color_map_t;
   typedef std::queue<VertexType> open_list_t;
