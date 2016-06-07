@@ -81,6 +81,9 @@ class Algorithm {
   static void print_solution(std::ostream* os,
                              const Solution& solution);
 
+  static void fundamental_cutset(const Graph& graph,
+                                 Solution* current_solution,
+                                 const EdgeType& edge_of_spanning_tree);
 
  private:
   RndGenerator m_rnd_engine;
@@ -352,6 +355,107 @@ void Algorithm<Graph, RndGenerator>::print_solution(
     }
     *os << '\n';
   }
+}
+
+template<typename Graph, typename RndGenerator>
+void Algorithm<Graph, RndGenerator>::fundamental_cutset(
+    const Graph& graph, Solution* current_solution,
+    const EdgeType& edge_of_spanning_tree) {
+  // Types definitions
+  typedef boost::two_bit_color_map<> color_map_t;
+  typedef std::queue<VertexType> open_list_t;
+
+  // Colors definitions
+  static const auto white_t =  boost::color_traits<
+    boost::two_bit_color_type>::white();
+  static const auto black_t =  boost::color_traits<
+    boost::two_bit_color_type>::black();
+  static const auto gray_t =  boost::color_traits<
+    boost::two_bit_color_type>::gray();
+
+  const auto& edges_tree = current_solution->
+      m_spanning_tree.get_edges_in_spanning_tree();
+
+  // Check if edge is in spanning_tree
+  // TODO(biagio): in release puoi levare questo check?
+  if (edges_tree.at(edge_of_spanning_tree) == false) {
+    throw std::runtime_error("Try to perform cutset of co-tree edge!");
+  }
+
+  EdgeFilter edges_in_cutset;
+
+  // Vertices of edge we're considerating
+  auto target = boost::target(edge_of_spanning_tree, graph);
+  auto source = boost::source(edge_of_spanning_tree, graph);
+
+  // Some variables inizialization
+  const auto num_vertices = boost::num_vertices(graph);
+  color_map_t color_map(num_vertices);
+  open_list_t openlist;
+  const auto spanning_tree_graph = current_solution->
+      m_spanning_tree.get_filtered_graph(graph);
+
+  // Black coloration
+  put(color_map, target, black_t);
+  openlist.push(target);
+  while (!openlist.empty()) {
+    const auto& node = openlist.front();
+    auto adj_vertices = adjacent_vertices(node, spanning_tree_graph);
+    std::for_each(adj_vertices.first,
+                  adj_vertices.second,
+                  [&source, &color_map, &openlist]
+                  (const VertexType& v) {
+                    if (v != source) {
+                      const auto& v_color = get(color_map, v);
+                      if (v_color == white_t) {
+                        put(color_map, v, black_t);
+                        openlist.push(v);
+                      }
+                      assert(v_color != gray_t);
+                    }
+                  });
+    openlist.pop();
+  }
+
+
+  // Gray coloration
+  put(color_map, source, gray_t);
+  openlist.push(source);
+  while (!openlist.empty()) {
+    const auto& node = openlist.front();
+    auto adj_vertices = adjacent_vertices(node, spanning_tree_graph);
+    std::for_each(adj_vertices.first,
+                  adj_vertices.second,
+                  [&target, &color_map, &openlist]
+                  (const VertexType& v) {
+                    if (v != target) {
+                      const auto& v_color = get(color_map, v);
+                      if (v_color == white_t) {
+                        put(color_map, v, gray_t);
+                        openlist.push(v);
+                      }
+                      assert(v_color != black_t);
+                    }
+                  });
+    openlist.pop();
+  }
+
+  // Cut assignment
+  const auto edges_spanning = edges(graph);
+  std::for_each(edges_spanning.first,
+                edges_spanning.second,
+                [&edges_in_cutset, &color_map, &graph]
+                (const EdgeType& e) {
+                  const auto source = boost::source(e, graph);
+                  const auto target = boost::target(e, graph);
+                  const auto color_s = get(color_map, source);
+                  const auto color_t = get(color_map, target);
+                  if (color_s != color_t) {
+                    edges_in_cutset[e] = true;
+                  } else {
+                    edges_in_cutset[e]= false;
+                  }
+                });
 }
 
 

@@ -68,6 +68,8 @@ void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
       solution.m_time_for_solution.count() << " ms\n";
   *os << "--------------------------------------------\n";
   assert(check_solution(graph, solution) == true);
+
+  algorithm.fundamental_cutset(graph, &solution, *edges(graph).first);
 }
 
 template<typename Graph>
