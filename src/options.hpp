@@ -24,6 +24,7 @@
 #include <string>
 
 namespace pap_solver {
+
 struct ProgramOptions {
   std::string input_filename;
   bool compressed_matrix = false;
@@ -31,7 +32,10 @@ struct ProgramOptions {
   bool generate_random_matrix = false;
   size_t size_generation_matrix = 0;
   float perc_one_into_gen_matrix = 0.5;
+  bool debug_seed = false;
+  int seed = 0;
 };
-}
+
+}  // namespace pap_solver
 
 #endif

@@ -34,7 +34,8 @@ class Engine {
 
   Engine() = default;
   void find_a_solution_and_print(const Graph& graph,
-                                 std::ostream* os);
+                                 std::ostream* os,
+                                 int seed = -1);
 
   bool check_solution(const Graph& graph,
                       const Solution& solution) const;
@@ -43,14 +44,15 @@ class Engine {
 
 template<typename Graph>
 void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
-                                              std::ostream* os) {
+                                              std::ostream* os,
+                                              int seed) {
   AlgorithmDefault algorithm;
-#ifdef _DEBUG
-  algorithm.set_seed(0);
-#else
-  algorithm.set_seed(
-      std::chrono::system_clock::now().time_since_epoch().count());
-#endif
+  if (seed >= 0) {
+    algorithm.set_seed(seed);
+  } else {
+    algorithm.set_seed(
+        std::chrono::system_clock::now().time_since_epoch().count());
+  }
 
   Solution solution;
   algorithm.solve(graph, &solution);

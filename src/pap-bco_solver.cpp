@@ -54,6 +54,7 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
     {"compressed", no_argument, 0, 'c'},
     {"help", no_argument, 0, 'h'},
     {"generate", required_argument, 0, 'g'},
+    {"seed", required_argument, 0, 's'},
     {0, 0, 0, 0}
   };
   int option_index;
@@ -67,6 +68,16 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
         break;
       case 'h':
         m_options.display_help = true;
+        break;
+      case 's':
+        m_options.debug_seed = true;
+        try {
+          m_options.seed = std::stoi(optarg);
+        } catch(const std::invalid_argument& err) {
+          std::cerr << "--seed [NUMBER]   Number must to be an"
+              " integer number";
+          return -1;
+        }
         break;
       case 'g': {
         m_options.generate_random_matrix = true;
@@ -129,7 +140,10 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
       std::cout << "-------------------------------------------\n";
 
       Engine<Graph> engine_solver;
-      engine_solver.find_a_solution_and_print(m_graph, &std::cout);
+      engine_solver.find_a_solution_and_print(
+          m_graph,
+          &std::cout,
+          m_options.debug_seed ? m_options.seed : -1);
     }
   }
 }
