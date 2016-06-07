@@ -41,9 +41,6 @@ class SpanningTree {
   /// A edge type of the graph.
   typedef typename Graph::edge_descriptor EdgeType;
 
-  /// An associative container for each vertex it returns its parent.
-  typedef std::map<VertexType, VertexType> MapVertexParent;
-
   /// An associative container for each edges it returns if in spanning tree.
   typedef std::map<EdgeType, bool> EdgeFilter;
 
@@ -65,10 +62,6 @@ class SpanningTree {
   /// A view on a graph.
   typedef boost::filtered_graph<Graph, PredicateFilterEdge> FilteredGraph;
 
-
-  /// A null vertex. The parent of the root will be equal to this.
-  const VertexType sNullVertex = Graph::null_vertex();
-
   static_assert(std::is_integral<VertexType>::value,
                 "The vertex type (descriptor) must to be a integer type!");
 
@@ -89,19 +82,22 @@ class SpanningTree {
   /// @param os [out]   The output stream wehere the subtree
   ///                   will be printed.
   ///
-  void print(std::ostream* os) const;
+  void print(const Graph& graph, std::ostream* os) const;
 
   /// @brief Clean the tree.
   void clear() noexcept;
 
-  inline const MapVertexParent& get_mapped_spanning_tree() const noexcept;
+  void perform_transformation(const Graph& graph,
+                              const EdgeType& edge_to_add,
+                              const EdgeType& edge_to_remove);
 
   inline const EdgeFilter& get_edges_in_spanning_tree() const noexcept;
 
   inline const FilteredGraph get_filtered_graph(const Graph& graph);
 
  private:
-  MapVertexParent m_mapped_spanning_tree;
+  typedef std::map<VertexType, VertexType> MapVertexParent;
+
   EdgeFilter m_edges_filter;
 
   template<typename RND>
@@ -123,15 +119,15 @@ void SpanningTree<Graph>::generate_rnd_spanning_tree(const Graph& graph,
   assert(rnd_engine != nullptr);
 
   clear();
-  makeMappedFromGraph(graph, rnd_engine, &m_mapped_spanning_tree);
-  makeFilterFromMap(graph, m_mapped_spanning_tree, &m_edges_filter);
+  MapVertexParent parent_map;
+  makeMappedFromGraph(graph, rnd_engine, &parent_map);
+  makeFilterFromMap(graph, parent_map, &m_edges_filter);
 
   assert(this_is_a_valid_spanning_tree(graph) == true);
 }
 
 template<typename Graph>
 void SpanningTree<Graph>::clear() noexcept {
-  m_mapped_spanning_tree.clear();
   m_edges_filter.clear();
 }
 
@@ -186,27 +182,31 @@ void SpanningTree<Graph>::makeFilterFromMap(const Graph& graph,
 }
 
 template<typename Graph>
-void SpanningTree<Graph>::print(std::ostream* os) const {
+void SpanningTree<Graph>::print(const Graph& graph, std::ostream* os) const {
   if (os == nullptr) return;
 
-  if (m_mapped_spanning_tree.size() == 0) {
-    *os << "Spanning Tree is empty!\n";
-  } else {
-    for (const auto& node : m_mapped_spanning_tree) {
-      if (node.second == sNullVertex) {
-        *os << "(" << node.first << ") --->  (" << "ROOT)\n";
-      } else {
-        *os << "(" << node.first << ")  ---> (" << node.second << ")\n";
-      }
-    }
-  }
-}
+  const auto verxs = vertices(graph);
+  std::for_each(verxs.first,
+                verxs.second,
+                [this, &os, &graph]
+                (const VertexType& v) {
+                  if (v == 0) {
+                    *os << '(' << v << ") ---> (ROOT)\n";
+                  } else {
+                    const auto& links = out_edges(v, graph);
+                    auto finder = std::find_if(links.first,
+                                               links.second,
+                                               [this]
+                                               (const EdgeType& e) {
+                                                 return m_edges_filter.at(e);
+                                               });
 
-template<typename Graph>
-inline
-const typename SpanningTree<Graph>::MapVertexParent&
-SpanningTree<Graph>::get_mapped_spanning_tree() const noexcept {
-  return m_mapped_spanning_tree;
+                    if (finder != links.second) {
+                      *os << '(' << v << ") ---> (" <<
+                          target(*finder, graph) << ")\n";
+                    }
+                  }
+                });
 }
 
 template<typename Graph>
@@ -226,31 +226,28 @@ SpanningTree<Graph>::get_filtered_graph(const Graph& graph) {
 template<typename Graph>
 bool SpanningTree<Graph>::this_is_a_valid_spanning_tree(
     const Graph& graph) {
-  // A valid spanning tree must have no cycle and all vertices
+  // A valid spanning tree must have no cycle
   const auto filtered_graph = get_filtered_graph(graph);
-
-  // Check whether the spanning tree has all vertices
-  const auto g_vertx = vertices(filtered_graph);
-
-  // Find a vertex in the spanning tree which don't belong the map
-  auto finder = std::find_if(g_vertx.first,
-                             g_vertx.second,
-                             [this](const VertexType& v) {
-                               const auto finder =
-                               m_mapped_spanning_tree.find(v);
-                               if (finder == m_mapped_spanning_tree.cend()) {
-                                 return true;
-                               }
-                               return false;
-                             });
-  if (finder != g_vertx.second) {
-    return false;
-  }
 
   // Check whether the spanning tree contains loops.
   return GraphUtility::graph_contains_loop(filtered_graph) ?
       false : true;
 }
+
+template<typename Graph>
+void SpanningTree<Graph>::perform_transformation(
+    const Graph& graph, const EdgeType& edge_to_add,
+    const EdgeType& edge_to_remove) {
+#ifdef _DEBUG
+  // Check condition od edge
+  assert(m_edges_filter.at(edge_to_remove) == true);
+  assert(m_edges_filter.at(edge_to_add) == false);
+#endif
+
+  m_edges_filter[edge_to_remove] = false;
+  m_edges_filter[edge_to_add] = true;
+}
+
 
 }  // namespace pap_solver
 
