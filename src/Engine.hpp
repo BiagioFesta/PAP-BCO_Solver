@@ -35,6 +35,9 @@ class Engine {
   Engine() = default;
   void find_a_solution_and_print(const Graph& graph,
                                  std::ostream* os);
+
+  bool check_solution(const Graph& graph,
+                      const Solution& solution) const;
 };
 
 
@@ -62,6 +65,60 @@ void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
   *os << "Time elapsed for the solution: " <<
       solution.m_time_for_solution.count() << " ms\n";
   *os << "--------------------------------------------\n";
+  assert(check_solution(graph, solution) == true);
+}
+
+template<typename Graph>
+bool Engine<Graph>::check_solution(const Graph& graph,
+                                   const Solution& solution) const {
+  typedef typename AlgorithmDefault::VertexType VertexType;
+  typedef typename AlgorithmDefault::PortAssignment PortAssignment;
+
+  auto vertx = vertices(graph);
+  auto finder = std::find_if(
+      vertx.first,
+      vertx.second,
+      [&solution, &graph]
+      (const VertexType& v) {
+        // Get the assignment of v
+        const auto& v_assignment = solution.m_assignment.at(v);
+        if (v_assignment == PortAssignment::UnAssigned) {
+          std::runtime_error("The solution is not complete!");
+        } else if (v_assignment == PortAssignment::PortAB) {
+          // If the node is PortAB it cannot give problem, so skip it
+          return false;
+        }
+
+        // Get all adjacent and check if exsists one with
+        // same assignment.
+        auto adj_list = adjacent_vertices(v, graph);
+        auto finder = std::find_if(
+            adj_list.first,
+            adj_list.second,
+            [&solution, &v_assignment]
+            (const VertexType& v_adj) {
+              const auto& adj_assignment =
+              solution.m_assignment.at(v_adj);
+
+              if (adj_assignment == PortAssignment::UnAssigned) {
+                std::runtime_error("The solution is not complete!");
+              }
+
+              if (adj_assignment == v_assignment) {
+                return true;
+              }
+              return false;
+            });
+
+        if (finder != adj_list.second) {
+          return true;
+        }
+        return false;
+      });
+  if (finder != vertx.second) {
+    return false;
+  }
+  return true;
 }
 
 }  // namespace pap_solver
