@@ -69,7 +69,8 @@ void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
   *os << "--------------------------------------------\n";
   assert(check_solution(graph, solution) == true);
 
-  algorithm.fundamental_cutset(graph, &solution, *edges(graph).first);
+  typename AlgorithmDefault::EdgeFilter cutset;
+  algorithm.fundamental_cutset(graph, &solution, *edges(graph).first, &cutset);
 }
 
 template<typename Graph>

@@ -83,7 +83,8 @@ class Algorithm {
 
   static void fundamental_cutset(const Graph& graph,
                                  Solution* current_solution,
-                                 const EdgeType& edge_of_spanning_tree);
+                                 const EdgeType& edge_of_spanning_tree,
+                                 EdgeFilter* cutset_output);
 
  private:
   RndGenerator m_rnd_engine;
@@ -360,7 +361,9 @@ void Algorithm<Graph, RndGenerator>::print_solution(
 template<typename Graph, typename RndGenerator>
 void Algorithm<Graph, RndGenerator>::fundamental_cutset(
     const Graph& graph, Solution* current_solution,
-    const EdgeType& edge_of_spanning_tree) {
+    const EdgeType& edge_of_spanning_tree, EdgeFilter* cutset_output) {
+  assert(cutset_output != nullptr);
+  
   // Types definitions
   typedef boost::two_bit_color_map<> color_map_t;
   typedef std::queue<VertexType> open_list_t;
@@ -382,7 +385,8 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
     throw std::runtime_error("Try to perform cutset of co-tree edge!");
   }
 
-  EdgeFilter edges_in_cutset;
+  EdgeFilter& edges_in_cutset = *cutset_output;
+  edges_in_cutset.clear();
 
   // Vertices of edge we're considerating
   auto target = boost::target(edge_of_spanning_tree, graph);
@@ -395,6 +399,7 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
   const auto spanning_tree_graph = current_solution->
       m_spanning_tree.get_filtered_graph(graph);
 
+  // TODO(biagio): le due colorazioni potrebbero essere parallelizzate
   // Black coloration
   put(color_map, target, black_t);
   openlist.push(target);
