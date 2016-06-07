@@ -185,7 +185,16 @@ template<typename Graph>
 void SpanningTree<Graph>::print(const Graph& graph, std::ostream* os) const {
   if (os == nullptr) return;
 
-  
+  const auto& tree_filter = get_filtered_graph(graph);
+  const auto es = edges(tree_filter);
+  std::for_each(es.first,
+                es.second,
+                [&os, &tree_filter]
+                (const EdgeType& e) {
+                  const auto t = target(e, tree_filter);
+                  const auto s = source(e, tree_filter);
+                  std::cout << "(" << s << ") <---> (" << t << ")\n";
+                });
 }
 
 template<typename Graph>
