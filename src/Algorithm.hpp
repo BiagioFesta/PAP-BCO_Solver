@@ -480,6 +480,8 @@ void Algorithm<Graph, RndGenerator>::find_all_odd_cotree_edges(
                          Algorithm::is_odd_cotree_edge(graph,
                                                        edges_in_tree,
                                                        e);
+                  } else {
+                    odd_cotree_edges[e] = false;
                   }
                 });
 }
