@@ -122,9 +122,8 @@ class Algorithm {
   ///                                 be stored.
   ///
   /// @note The spanning tree in the solution must to be already generated.
-  static void assign_accordance_spanning_tree(
-      const Graph& graph,
-      Solution* out_solution);
+  static void assign_accordance_spanning_tree(const Graph& graph,
+                                              Solution* out_solution);
 };
 
 template<typename Graph, typename RndGenerator>
