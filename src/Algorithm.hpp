@@ -96,18 +96,24 @@ class Algorithm {
                                  const EdgeType& edge_of_spanning_tree,
                                  EdgeFilter* cutset_output);
 
+  void debug(const Graph& graph);
+
  private:
   RndGenerator m_rnd_engine;
 
   void solve_problem(const Graph& graph, Solution* out_solution);
 
-  static void find_all_odd_cotree_edges(const Graph& graph,
-                                        const EdgeFilter& edges_in_tree,
-                                        EdgeFilter* odd_edges);
+  static size_t find_all_odd_cotree_edges(const Graph& graph,
+                                          const EdgeFilter& edges_in_tree,
+                                          EdgeFilter* odd_edges);
 
   static bool is_odd_cotree_edge(const Graph& graph,
                                  const EdgeFilter& edges_in_spanning_tree,
                                  const EdgeType& e_to_test);
+
+  static void assign_accordance_odd_cycle(const Graph& graph,
+                                          EdgeFilter* odd_cotree_edges,
+                                          Solution* output_solution);
 
   /// TODO(biagio): comment
   ///
@@ -161,62 +167,8 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
   EdgeFilter odd_cotree_edges;
   find_all_odd_cotree_edges(graph, edges_in_spanning_tree, &odd_cotree_edges);
 
-  // Create a g' considering only odd cotree edges
-  FilteredGraph g_prime(
-      graph, PredicateFilterEdge(odd_cotree_edges));
-
-  // Solve odd edges's problem
-  bool found_one_degree;
-  bool g_prime_empty = false;
-  size_t number_of_AB = 0;
-  while (!g_prime_empty) {
-    found_one_degree = false;
-    auto range_verts = vertices(g_prime);
-    for (auto i = range_verts.first;
-         i != range_verts.second && found_one_degree == false;
-         ++i) {
-      auto degree = out_degree(*i, g_prime);
-      if (degree == 1) {
-        EdgeType edge = *(out_edges(*i, g_prime).first);
-        auto target = boost::target(edge, g_prime);
-        assignment[target] = PortAssignment::PortAB;
-        ++number_of_AB;
-        std::for_each(out_edges(target, g_prime).first,
-                      out_edges(target, g_prime).second,
-                      [&odd_cotree_edges]
-                      (const EdgeType& e) {
-                        odd_cotree_edges[e] = false;
-                      });
-        found_one_degree = true;
-      }
-    }
-    if (found_one_degree == false) {
-      size_t num_degree_max = 0;
-      VertexType max_vertex_degree;
-      for (auto i = vertices(g_prime).first;
-           i != vertices(g_prime).second;
-           ++i) {
-        auto degree = out_degree(*i, g_prime);
-        if (degree > num_degree_max) {
-          num_degree_max = degree;
-          max_vertex_degree = *i;
-        }
-      }
-      if (num_degree_max > 0) {
-        assignment[max_vertex_degree] = PortAssignment::PortAB;
-        ++number_of_AB;
-        std::for_each(out_edges(max_vertex_degree, g_prime).first,
-                      out_edges(max_vertex_degree, g_prime).second,
-                      [&odd_cotree_edges]
-                      (const EdgeType& e) {
-                        odd_cotree_edges[e] = false;
-                      });
-      } else {
-        g_prime_empty = true;
-      }
-    }
-  }
-  out_solution->m_size_solution = number_of_AB;
+  // Assign V_ab group in according to odd cycles
+  assign_accordance_odd_cycle(graph, &odd_cotree_edges, out_solution);
 }
 
 template<typename Graph, typename RndGenerator>
@@ -463,27 +415,175 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
 }
 
 template<typename Graph, typename RndGenerator>
-void Algorithm<Graph, RndGenerator>::find_all_odd_cotree_edges(
+size_t Algorithm<Graph, RndGenerator>::find_all_odd_cotree_edges(
     const Graph& graph,
     const EdgeFilter& edges_in_tree,
     EdgeFilter* odd_edges) {
   assert(odd_edges != nullptr);
 
   EdgeFilter& odd_cotree_edges = *odd_edges;
+  odd_cotree_edges.clear();
+  size_t number_of_odd = 0;
   std::for_each(edges(graph).first,
                 edges(graph).second,
-                [&graph, &odd_cotree_edges, &edges_in_tree]
+                [&graph, &odd_cotree_edges, &edges_in_tree, &number_of_odd]
                 (const EdgeType& e) {
                   const auto finder = edges_in_tree.find(e);
                   if (edges_in_tree.at(e) == false) {
-                    odd_cotree_edges[e] =
-                         Algorithm::is_odd_cotree_edge(graph,
-                                                       edges_in_tree,
-                                                       e);
+                    const auto is_odd =
+                        Algorithm::is_odd_cotree_edge(graph,
+                                                      edges_in_tree,
+                                                      e);
+                    if (is_odd == true) {
+                      ++number_of_odd;
+                    }
+                    odd_cotree_edges[e] = is_odd;
                   } else {
                     odd_cotree_edges[e] = false;
                   }
                 });
+  return number_of_odd;
+}
+
+
+template<typename Graph, typename RndGenerator>
+void Algorithm<Graph, RndGenerator>::debug(const Graph& graph) {
+  set_seed(std::chrono::system_clock::now().time_since_epoch().count());
+  Solution solution;
+
+  solution.m_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
+  //solution.m_spanning_tree.print(graph, &std::cout);
+  const EdgeFilter& edges_tree =
+      solution.m_spanning_tree.get_edges_in_spanning_tree();
+
+  EdgeFilter odd_edges;
+  auto num_odd = find_all_odd_cotree_edges(graph, edges_tree, &odd_edges);
+  std::cout << "Number odd: " << num_odd << '\n';
+  
+  EdgeFilter cutset;
+  const EdgeType* max_current = nullptr;
+  int max_odd_cutset = 0;
+  EdgeFilter max_cutset;
+  for (const auto& e : edges_tree) {
+    if (e.second == true) {
+      fundamental_cutset(graph, solution, e.first, &cutset);
+      int odd_in_cutset = 0;
+      std::for_each(cutset.cbegin(),
+                    cutset.cend(),
+                    [&odd_in_cutset, &odd_edges]
+                    (const typename EdgeFilter::value_type& pair) {
+                      if (pair.second == true) {
+                        if (odd_edges.at(pair.first) == true) {
+                          ++odd_in_cutset;
+                        } else {
+                          --odd_in_cutset;
+                        }
+                      }
+                    });
+      //std::cout << e.first << "  :  ";
+      //std::cout << odd_in_cutset << '\n';
+      if (max_current == nullptr) {
+        max_current = &(e.first);
+        max_odd_cutset = odd_in_cutset;
+        max_cutset = cutset;
+      } else {
+        if (odd_in_cutset > max_odd_cutset) {
+          max_current = &(e.first);
+          max_odd_cutset = odd_in_cutset;
+          max_cutset = cutset;
+        }
+      }
+    }
+  }
+  std::cout << "The max is: " << *max_current << '\n';
+  assign_accordance_spanning_tree(graph, &solution);
+  assign_accordance_odd_cycle(graph, &odd_edges, &solution);
+  std::cout << "Size of solution: " << solution.m_size_solution << '\n';
+  
+  solution.m_spanning_tree.perform_transformation(
+      graph,
+      std::find_if(max_cutset.cbegin(),
+                   max_cutset.cend(),
+                   [&odd_edges]
+                   (const typename decltype(max_cutset)::value_type& p) {
+                     return p.second && odd_edges.at(p.first) == true;
+                   })->first,
+      *max_current);
+  const auto& edges_tree2 =
+      solution.m_spanning_tree.get_edges_in_spanning_tree();
+  //solution.m_spanning_tree.print(graph, &std::cout);
+  num_odd = find_all_odd_cotree_edges(graph, edges_tree2, &odd_edges);
+  std::cout << "Number odd: " << num_odd << '\n';
+  assign_accordance_spanning_tree(graph, &solution);
+  assign_accordance_odd_cycle(graph, &odd_edges, &solution);
+  std::cout << "Size solution: " << solution.m_size_solution << '\n';
+}
+
+template<typename Graph, typename RndGenerator>
+void Algorithm<Graph, RndGenerator>::assign_accordance_odd_cycle(
+    const Graph& graph,
+    EdgeFilter* oddCotreeEdges,
+    Solution* output_solution) {
+  assert(output_solution != nullptr);
+
+  auto& assignment = output_solution->m_assignment;
+  auto odd_cotree_edges = *oddCotreeEdges;
+
+  // Create a g' considering only odd cotree edges
+  FilteredGraph g_prime(graph, PredicateFilterEdge(odd_cotree_edges));
+
+  // Solve odd edges's problem
+  bool found_one_degree;
+  bool g_prime_empty = false;
+  size_t number_of_AB = 0;
+  while (!g_prime_empty) {
+    found_one_degree = false;
+    auto range_verts = vertices(g_prime);
+    for (auto i = range_verts.first;
+         i != range_verts.second && found_one_degree == false;
+         ++i) {
+      auto degree = out_degree(*i, g_prime);
+      if (degree == 1) {
+        EdgeType edge = *(out_edges(*i, g_prime).first);
+        auto target = boost::target(edge, g_prime);
+        assignment[target] = PortAssignment::PortAB;
+        ++number_of_AB;
+        std::for_each(out_edges(target, g_prime).first,
+                      out_edges(target, g_prime).second,
+                      [&odd_cotree_edges]
+                      (const EdgeType& e) {
+                        odd_cotree_edges[e] = false;
+                      });
+        found_one_degree = true;
+      }
+    }
+    if (found_one_degree == false) {
+      size_t num_degree_max = 0;
+      VertexType max_vertex_degree;
+      for (auto i = vertices(g_prime).first;
+           i != vertices(g_prime).second;
+           ++i) {
+        auto degree = out_degree(*i, g_prime);
+        if (degree > num_degree_max) {
+          num_degree_max = degree;
+          max_vertex_degree = *i;
+        }
+      }
+      if (num_degree_max > 0) {
+        assignment[max_vertex_degree] = PortAssignment::PortAB;
+        ++number_of_AB;
+        std::for_each(out_edges(max_vertex_degree, g_prime).first,
+                      out_edges(max_vertex_degree, g_prime).second,
+                      [&odd_cotree_edges]
+                      (const EdgeType& e) {
+                        odd_cotree_edges[e] = false;
+                      });
+      } else {
+        g_prime_empty = true;
+      }
+    }
+  }
+  output_solution->m_size_solution = number_of_AB;
 }
 
 
