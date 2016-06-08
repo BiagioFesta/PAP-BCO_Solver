@@ -469,7 +469,7 @@ void Algorithm<Graph, RndGenerator>::find_all_odd_cotree_edges(
     EdgeFilter* odd_edges) {
   assert(odd_edges != nullptr);
 
-  EdgeFilter odd_cotree_edges = *odd_edges;
+  EdgeFilter& odd_cotree_edges = *odd_edges;
   std::for_each(edges(graph).first,
                 edges(graph).second,
                 [&graph, &odd_cotree_edges, &edges_in_tree]
