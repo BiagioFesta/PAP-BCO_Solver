@@ -62,6 +62,9 @@ class Algorithm {
   /// @brief A view on a graph.
   typedef typename SpanningTree<Graph>::FilteredGraph FilteredGraph;
 
+  /// @brief An elementary transformation on a spanning tree.
+  typedef std::pair<EdgeType, EdgeType> EdgeTransformation;
+
   /// @brief A struct with the solution and some its details.
   struct Solution {
     MapAssignment m_assignment;
@@ -92,7 +95,7 @@ class Algorithm {
   ///
   /// @note Complexity should be O(|V| + |E|).
   static void fundamental_cutset(const Graph& graph,
-                                 const Solution& current_solution,
+                                 const SpanningTreeT& spanning_tree,
                                  const EdgeType& edge_of_spanning_tree,
                                  EdgeFilter* cutset_output);
 
@@ -102,7 +105,16 @@ class Algorithm {
   void solve_problem_for_a_tree(const Graph& graph,
                                 const SpanningTreeT& spanning_tree,
                                 MapAssignment* assignment,
-                                size_t* number_of_AB);
+                                size_t* number_of_AB,
+                                EdgeFilter* odd_cotree_edges);
+
+  void find_the_best_solution(const Graph& graph,
+                              const SpanningTreeT& initial_spann_tree,
+                              const EdgeFilter& odd_edges,
+                              const size_t initial_size_solution,
+                              MapAssignment* p_assignment,
+                              size_t* p_number_of_AB,
+                              EdgeTransformation* p_transformation);
 
   static size_t find_all_odd_cotree_edges(const Graph& graph,
                                           const EdgeFilter& edges_in_tree,
@@ -150,23 +162,59 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
     Solution* out_solution) {
   assert(out_solution != nullptr);
 
+  SpanningTreeT rnd_spanning_tree;
+  MapAssignment local_assignment;
+  EdgeFilter odd_edges;
+  size_t local_size;
+  EdgeTransformation local_transformation;
+
   auto time_start = std::chrono::steady_clock::now();
 
-  // Generate the spanning tree
-  SpanningTreeT rnd_spanning_tree;
+  // Generate the initial spanning tree
   rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
 
   // Solve the problem
   solve_problem_for_a_tree(graph,
                            rnd_spanning_tree,
-                           &(out_solution->m_assignment),
-                           &(out_solution->m_size_solution));
+                           &out_solution->m_assignment,
+                           &out_solution->m_size_solution,
+                           &odd_edges);
+
+  // Try to minimize
+  for (int i=0; i < 10; ++i) {
+    find_the_best_solution(graph,
+                           rnd_spanning_tree,
+                           odd_edges,
+                           out_solution->m_size_solution,
+                           &local_assignment,
+                           &local_size,
+                           &local_transformation);
+
+    if (local_size < out_solution->m_size_solution) {
+      out_solution->m_size_solution = local_size;
+      out_solution->m_assignment = local_assignment;
+      rnd_spanning_tree.perform_transformation(graph,
+                                               local_transformation.first,
+                                               local_transformation.second);
+      find_all_odd_cotree_edges(graph,
+                                rnd_spanning_tree.get_edges_in_spanning_tree(),
+                                &odd_edges);
+    } else {
+      rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
+      solve_problem_for_a_tree(graph,
+                               rnd_spanning_tree,
+                               &out_solution->m_assignment,
+                               &out_solution->m_size_solution,
+                               &odd_edges);
+    }
+  }
 
   auto time_stop = std::chrono::steady_clock::now();
 
   out_solution->m_time_for_solution =
       std::chrono::duration_cast<std::chrono::milliseconds>(
       time_stop - time_start);
+    // TODO(biagio): the spanning tree must to be written in the solution
 }
 
 template<typename Graph, typename RndGenerator>
@@ -174,9 +222,11 @@ void Algorithm<Graph, RndGenerator>::solve_problem_for_a_tree(
     const Graph& graph,
     const SpanningTreeT& spanning_tree,
     MapAssignment* p_assignment,
-    size_t* p_number_of_AB) {
+    size_t* p_number_of_AB,
+    EdgeFilter* odd_cotree_edges) {
   assert(p_assignment != nullptr);
   assert(p_number_of_AB != nullptr);
+  assert(odd_cotree_edges != nullptr);
 
   auto& assignment = *p_assignment;
 
@@ -188,15 +238,76 @@ void Algorithm<Graph, RndGenerator>::solve_problem_for_a_tree(
   assign_accordance_spanning_tree(graph, spanning_tree_graph, p_assignment);
 
   // Find odd cotree edges
-  EdgeFilter odd_cotree_edges;
-  find_all_odd_cotree_edges(graph, edges_in_spanning_tree, &odd_cotree_edges);
+  find_all_odd_cotree_edges(graph, edges_in_spanning_tree, odd_cotree_edges);
 
   // Assign V_ab group in according to odd cycles
+  EdgeFilter copy_odd_edges = *odd_cotree_edges;
   assign_accordance_odd_cycle(graph,
-                              &odd_cotree_edges,
+                              &copy_odd_edges,
                               p_assignment,
                               p_number_of_AB);
 }
+
+template<typename Graph, typename RndGenerator>
+void Algorithm<Graph, RndGenerator>:: find_the_best_solution(
+    const Graph& graph,
+    const SpanningTreeT& initial_spann_tree,
+    const EdgeFilter& odd_edges,
+    const size_t initial_size_solution,
+    MapAssignment* p_assignment,
+    size_t* p_number_of_AB,
+    EdgeTransformation* p_transformation) {
+  assert(p_assignment != nullptr);
+  assert(p_number_of_AB != nullptr);
+  assert(p_transformation != nullptr);
+
+  // Local variables and initializations
+  EdgeFilter cutset;
+  MapAssignment local_solution;
+  EdgeFilter local_odd_edges;
+  size_t local_size;
+  *p_number_of_AB = initial_size_solution;
+  auto copy_initial_tree = initial_spann_tree;
+
+  const auto& sp_graph = initial_spann_tree.get_filtered_graph(graph);
+  const auto tree_edges = edges(sp_graph);
+  std::for_each(tree_edges.first,
+                tree_edges.second,
+                [&]
+                (const EdgeType& et) {
+                  fundamental_cutset(graph,
+                                     initial_spann_tree,
+                                     et,
+                                     &cutset);
+
+                  for (const auto& ec : cutset) {
+                    if (ec.second == true &&
+                        odd_edges.at(ec.first) == true) {
+                      copy_initial_tree.perform_transformation(graph,
+                                                               ec.first,
+                                                               et);
+
+                      solve_problem_for_a_tree(graph,
+                                               copy_initial_tree,
+                                               &local_solution,
+                                               &local_size,
+                                               &local_odd_edges);
+
+                      if (local_size < *p_number_of_AB) {
+                        *p_number_of_AB = local_size;
+                        *p_assignment = local_solution;
+                        *p_transformation = std::make_pair(ec.first, et);
+                      }
+
+                      // Reverse transformation
+                      copy_initial_tree.perform_transformation(graph,
+                                                               et,
+                                                               ec.first);
+                    }
+                  }
+                });
+}
+
 
 template<typename Graph, typename RndGenerator>
 bool Algorithm<Graph, RndGenerator>::is_odd_cotree_edge(
@@ -340,7 +451,7 @@ void Algorithm<Graph, RndGenerator>::print_solution(
 
 template<typename Graph, typename RndGenerator>
 void Algorithm<Graph, RndGenerator>::fundamental_cutset(
-    const Graph& graph, const Solution& current_solution,
+    const Graph& graph, const SpanningTreeT& spanning_tree,
     const EdgeType& edge_of_spanning_tree, EdgeFilter* cutset_output) {
   assert(cutset_output != nullptr);
 
@@ -356,8 +467,7 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
   static const auto gray_t =  boost::color_traits<
     boost::two_bit_color_type>::gray();
 
-  const auto& edges_tree = current_solution.
-      m_spanning_tree.get_edges_in_spanning_tree();
+  const auto& edges_tree = spanning_tree.get_edges_in_spanning_tree();
 
   // Check if edge is in spanning_tree
   // TODO(biagio): in release puoi levare questo check?
@@ -376,8 +486,7 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
   const auto num_vertices = boost::num_vertices(graph);
   color_map_t color_map(num_vertices);
   open_list_t openlist;
-  const auto spanning_tree_graph = current_solution.
-      m_spanning_tree.get_filtered_graph(graph);
+  const auto spanning_tree_graph = spanning_tree.get_filtered_graph(graph);
 
   // TODO(biagio): le due colorazioni potrebbero essere parallelizzate
   // Black coloration
