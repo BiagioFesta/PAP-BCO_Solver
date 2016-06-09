@@ -106,7 +106,8 @@ class Algorithm {
                                 const SpanningTreeT& spanning_tree,
                                 MapAssignment* assignment,
                                 size_t* number_of_AB,
-                                EdgeFilter* odd_cotree_edges);
+                                EdgeFilter* odd_cotree_edges,
+                                MapAssignment* mapped_sp_based);
 
   void find_the_best_solution(const Graph& graph,
                               const SpanningTreeT& initial_spann_tree,
@@ -114,14 +115,15 @@ class Algorithm {
                               const size_t initial_size_solution,
                               MapAssignment* p_assignment,
                               size_t* p_number_of_AB,
-                              EdgeTransformation* p_transformation);
+                              EdgeTransformation* p_transformation,
+                              MapAssignment* mapped_sp_based);
 
   static size_t find_all_odd_cotree_edges(const Graph& graph,
-                                          const EdgeFilter& edges_in_tree,
+                                          const MapAssignment& mapped_sp_based,
                                           EdgeFilter* odd_edges);
 
   static bool is_odd_cotree_edge(const Graph& graph,
-                                 const EdgeFilter& edges_in_spanning_tree,
+                                 const MapAssignment& mapped_sp_based,
                                  const EdgeType& e_to_test);
 
   /// @brief Assign some vertices to the portAB to solve_problem the problem
@@ -164,6 +166,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
 
   SpanningTreeT rnd_spanning_tree;
   MapAssignment local_assignment;
+  MapAssignment local_spbased_assignment;
   EdgeFilter odd_edges;
   size_t local_size;
   EdgeTransformation local_transformation;
@@ -178,17 +181,19 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
                            rnd_spanning_tree,
                            &out_solution->m_assignment,
                            &out_solution->m_size_solution,
-                           &odd_edges);
+                           &odd_edges,
+                           &local_spbased_assignment);
 
   // Try to minimize
-  for (int i=0; i < 10; ++i) {
+  for (int i=0; i < 50; ++i) {
     find_the_best_solution(graph,
                            rnd_spanning_tree,
                            odd_edges,
                            out_solution->m_size_solution,
                            &local_assignment,
                            &local_size,
-                           &local_transformation);
+                           &local_transformation,
+                           &local_spbased_assignment);
 
     if (local_size < out_solution->m_size_solution) {
       out_solution->m_size_solution = local_size;
@@ -197,7 +202,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
                                                local_transformation.first,
                                                local_transformation.second);
       find_all_odd_cotree_edges(graph,
-                                rnd_spanning_tree.get_edges_in_spanning_tree(),
+                                local_spbased_assignment,
                                 &odd_edges);
     } else {
       rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
@@ -205,7 +210,8 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
                                rnd_spanning_tree,
                                &out_solution->m_assignment,
                                &out_solution->m_size_solution,
-                               &odd_edges);
+                               &odd_edges,
+                               &local_spbased_assignment);
     }
   }
 
@@ -223,11 +229,13 @@ void Algorithm<Graph, RndGenerator>::solve_problem_for_a_tree(
     const SpanningTreeT& spanning_tree,
     MapAssignment* p_assignment,
     size_t* p_number_of_AB,
-    EdgeFilter* odd_cotree_edges) {
+    EdgeFilter* odd_cotree_edges,
+    MapAssignment* mapped_sp_based) {
   assert(p_assignment != nullptr);
   assert(p_number_of_AB != nullptr);
   assert(odd_cotree_edges != nullptr);
-
+  assert(mapped_sp_based != nullptr);
+  
   auto& assignment = *p_assignment;
 
   const auto& spanning_tree_graph = spanning_tree.get_filtered_graph(graph);
@@ -237,8 +245,11 @@ void Algorithm<Graph, RndGenerator>::solve_problem_for_a_tree(
   // Preliminary assignment in according to the spanning tree
   assign_accordance_spanning_tree(graph, spanning_tree_graph, p_assignment);
 
+  // Fill mapped_spanning_tree-based
+  *mapped_sp_based = *p_assignment;
+  
   // Find odd cotree edges
-  find_all_odd_cotree_edges(graph, edges_in_spanning_tree, odd_cotree_edges);
+  find_all_odd_cotree_edges(graph, *p_assignment, odd_cotree_edges);
 
   // Assign V_ab group in according to odd cycles
   EdgeFilter copy_odd_edges = *odd_cotree_edges;
@@ -256,14 +267,17 @@ void Algorithm<Graph, RndGenerator>:: find_the_best_solution(
     const size_t initial_size_solution,
     MapAssignment* p_assignment,
     size_t* p_number_of_AB,
-    EdgeTransformation* p_transformation) {
+    EdgeTransformation* p_transformation,
+    MapAssignment* p_mapped_sp_based) {
   assert(p_assignment != nullptr);
   assert(p_number_of_AB != nullptr);
   assert(p_transformation != nullptr);
+  assert(p_mapped_sp_based != nullptr);
 
   // Local variables and initializations
   EdgeFilter cutset;
   MapAssignment local_solution;
+  MapAssignment local_mapped_sp_assignment;
   EdgeFilter local_odd_edges;
   size_t local_size;
   *p_number_of_AB = initial_size_solution;
@@ -291,12 +305,14 @@ void Algorithm<Graph, RndGenerator>:: find_the_best_solution(
                                                copy_initial_tree,
                                                &local_solution,
                                                &local_size,
-                                               &local_odd_edges);
+                                               &local_odd_edges,
+                                               &local_mapped_sp_assignment);
 
                       if (local_size < *p_number_of_AB) {
                         *p_number_of_AB = local_size;
                         *p_assignment = local_solution;
                         *p_transformation = std::make_pair(ec.first, et);
+                        *p_mapped_sp_based = local_mapped_sp_assignment;
                       }
 
                       // Reverse transformation
@@ -311,54 +327,16 @@ void Algorithm<Graph, RndGenerator>:: find_the_best_solution(
 
 template<typename Graph, typename RndGenerator>
 bool Algorithm<Graph, RndGenerator>::is_odd_cotree_edge(
-    const Graph& graph, const EdgeFilter& edges_in_spanning_tree,
+    const Graph& graph,
+    const MapAssignment& mapped_sp_based,
     const EdgeType& e_to_test) {
+  const auto& target = boost::target(e_to_test, graph);
+  const auto& source = boost::source(e_to_test, graph);
+  assert(mapped_sp_based.at(target) != PortAssignment::UnAssigned);
+  assert(mapped_sp_based.at(source) != PortAssignment::UnAssigned);
 
-  auto edges_in_spanning_tree_plus_e = edges_in_spanning_tree;
-  edges_in_spanning_tree_plus_e[e_to_test] = true;
-
-  FilteredGraph cycled_graph(
-      graph, PredicateFilterEdge(edges_in_spanning_tree_plus_e));
-
-  typedef boost::two_bit_color_map<> color_map_t;
-  typedef std::queue<VertexType> open_list_t;
-  static const auto white_t =  boost::color_traits<
-    boost::two_bit_color_type>::white();
-  static const auto black_t =  boost::color_traits<
-    boost::two_bit_color_type>::black();
-  static const auto gray_t =  boost::color_traits<
-    boost::two_bit_color_type>::gray();
-
-  const auto num_vertices = boost::num_vertices(cycled_graph);
-  color_map_t color_map(num_vertices);
-
-  open_list_t openlist;
-  const auto root = *(vertices(cycled_graph).first);
-  openlist.push(root);
-  put(color_map, root, black_t);
-
-  while (openlist.empty() == false) {
-    const auto& node = openlist.front();
-    auto this_node_color = get(color_map, node);
-    auto edges_list = out_edges(node, cycled_graph);
-    for (auto i = edges_list.first;
-         i != edges_list.second;
-         ++i) {
-      auto target = boost::target(*i, cycled_graph);
-      auto color_adjacent = get(color_map, target);
-      if (color_adjacent == white_t) {
-        if (this_node_color == black_t)
-          put(color_map, target, gray_t);
-        else
-          put(color_map, target, black_t);
-        openlist.push(target);
-      } else if (color_adjacent == this_node_color) {
-        return true;
-      }
-    }
-    openlist.pop();
-  }
-  return false;
+  return mapped_sp_based.at(target) == mapped_sp_based.at(source) ?
+      true : false;
 }
 
 template<typename Graph, typename RndGenerator>
@@ -555,30 +533,29 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
 template<typename Graph, typename RndGenerator>
 size_t Algorithm<Graph, RndGenerator>::find_all_odd_cotree_edges(
     const Graph& graph,
-    const EdgeFilter& edges_in_tree,
+    const MapAssignment& mapped_sp_based,
     EdgeFilter* odd_edges) {
   assert(odd_edges != nullptr);
 
   EdgeFilter& odd_cotree_edges = *odd_edges;
   odd_cotree_edges.clear();
   size_t number_of_odd = 0;
-  std::for_each(edges(graph).first,
-                edges(graph).second,
-                [&graph, &odd_cotree_edges, &edges_in_tree, &number_of_odd]
+
+  bool local_odd;
+  const auto edges_graph = edges(graph);
+  std::for_each(edges_graph.first,
+                edges_graph.second,
+                [&]
                 (const EdgeType& e) {
-                  const auto finder = edges_in_tree.find(e);
-                  if (edges_in_tree.at(e) == false) {
-                    const auto is_odd =
-                        Algorithm::is_odd_cotree_edge(graph,
-                                                      edges_in_tree,
-                                                      e);
-                    if (is_odd == true) {
-                      ++number_of_odd;
-                    }
-                    odd_cotree_edges[e] = is_odd;
-                  } else {
-                    odd_cotree_edges[e] = false;
-                  }
+                 local_odd =
+                     Algorithm::is_odd_cotree_edge(graph,
+                                                   mapped_sp_based,
+                                                   e);
+                 if (local_odd == true) {
+                   ++number_of_odd;
+                 }
+
+                 odd_cotree_edges[e] = local_odd;
                 });
   return number_of_odd;
 }
