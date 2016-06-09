@@ -60,7 +60,7 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
   int option_index;
   while (true) {
     option_index = 0;
-    auto c = getopt_long(argc, argv, "g:hc", long_options, &option_index);
+    auto c = getopt_long(argc, argv, "s:g:hc", long_options, &option_index);
     if (c == -1) break;
     switch (c) {
       case 'c':
