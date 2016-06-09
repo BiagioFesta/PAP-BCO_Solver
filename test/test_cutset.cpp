@@ -34,6 +34,5 @@ int main(int argc, char *argv[]) {
   parse_matrix(&graph, &file);
 
   Algorithm<Graph, std::default_random_engine> alg;
-  alg.debug(graph);
   return 0;
 }
