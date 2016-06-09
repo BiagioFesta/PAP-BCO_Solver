@@ -185,7 +185,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
                            &local_spbased_assignment);
 
   // Try to minimize
-  for (int i=0; i < 50; ++i) {
+  for (int i=0; i < 10; ) {
     find_the_best_solution(graph,
                            rnd_spanning_tree,
                            odd_edges,
@@ -204,6 +204,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem(
       find_all_odd_cotree_edges(graph,
                                 local_spbased_assignment,
                                 &odd_edges);
+      ++i;
     } else {
       rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
       solve_problem_for_a_tree(graph,
@@ -247,7 +248,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem_for_a_tree(
 
   // Fill mapped_spanning_tree-based
   *mapped_sp_based = *p_assignment;
-  
+
   // Find odd cotree edges
   find_all_odd_cotree_edges(graph, *p_assignment, odd_cotree_edges);
 
