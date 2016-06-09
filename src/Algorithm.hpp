@@ -396,9 +396,9 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
   }
 
   // Cut assignment
-  const auto edges_spanning = edges(graph);
-  std::for_each(edges_spanning.first,
-                edges_spanning.second,
+  const auto edges_graph = edges(graph);
+  std::for_each(edges_graph.first,
+                edges_graph.second,
                 [&edges_in_cutset, &color_map, &graph]
                 (const EdgeType& e) {
                   const auto source = boost::source(e, graph);
