@@ -225,8 +225,8 @@ void SpanningTree<Graph>::perform_transformation(
   assert(m_edges_filter.at(edge_to_add) == false);
 #endif
 
-  m_edges_filter[edge_to_remove] = false;
-  m_edges_filter[edge_to_add] = true;
+  m_edges_filter.at(edge_to_remove) = false;
+  m_edges_filter.at(edge_to_add) = true;
 }
 
 
