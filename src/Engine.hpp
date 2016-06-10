@@ -69,6 +69,8 @@ void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
   AlgorithmDefault::print_solution(os, solution);
   *os << "Number of vertices on PortAB: " <<
       solution.m_size_solution << "\n";
+  *os << "Number of odd co-tree edges: " <<
+      solution.m_number_odd_edges << "\n";
   *os << "Time elapsed for the solution: " <<
       solution.m_time_for_solution.count() << " ms\n";
   *os << "--------------------------------------------\n";
