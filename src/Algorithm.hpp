@@ -183,7 +183,9 @@ void Algorithm<Graph, RndGenerator>::find_rnd_solution_fast(
                            &odd_edges,
                            &mapped_sp_based);
 
+
   // Assign the spanning tree
+  // TODO(biagio): verificare che la move sia implementata e che non copy
   out_solution->m_spanning_tree = std::move(rnd_spanning_tree);
 
   auto time_stop = std::chrono::steady_clock::now();
@@ -272,7 +274,7 @@ void Algorithm<Graph, RndGenerator>::solve_problem_for_a_tree(
   assert(p_number_of_AB != nullptr);
   assert(odd_cotree_edges != nullptr);
   assert(mapped_sp_based != nullptr);
-  
+
   auto& assignment = *p_assignment;
 
   const auto& spanning_tree_graph = spanning_tree.get_filtered_graph(graph);
