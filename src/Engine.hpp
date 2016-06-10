@@ -60,7 +60,7 @@ void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
   }
 
   Solution solution;
-  algorithm.solve_problem(graph, &solution);
+  algorithm.find_rnd_solution_fast(graph, &solution);
 
   *os << "--------Spanning Tree Considered-----------\n";
   solution.m_spanning_tree.print(graph, os);

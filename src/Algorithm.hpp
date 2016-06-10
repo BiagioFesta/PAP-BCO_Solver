@@ -78,6 +78,8 @@ class Algorithm {
 
   void solve_problem(const Graph& graph, Solution* out_solution);
 
+  void find_rnd_solution_fast(const Graph& graph, Solution* out_solution);
+
   /// @brief Sets the seed for the random engine.
   void set_seed(int seed);
 
@@ -156,6 +158,40 @@ class Algorithm {
 template<typename Graph, typename RndGenerator>
 void Algorithm<Graph, RndGenerator>::set_seed(int seed) {
   m_rnd_engine.seed(seed);
+}
+
+template<typename Graph, typename RndGenerator>
+void Algorithm<Graph, RndGenerator>::find_rnd_solution_fast(
+    const Graph& graph, Solution* out_solution) {
+  assert(out_solution != nullptr);
+
+  // Local variables
+  SpanningTreeT rnd_spanning_tree;
+  MapAssignment mapped_sp_based;
+  EdgeFilter odd_edges;
+
+  auto time_start = std::chrono::steady_clock::now();
+
+  // Generate a rnd spanning tree
+  rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
+
+  // Solve the problem
+  solve_problem_for_a_tree(graph,
+                           rnd_spanning_tree,
+                           &out_solution->m_assignment,
+                           &out_solution->m_size_solution,
+                           &odd_edges,
+                           &mapped_sp_based);
+
+  // Assign the spanning tree
+  out_solution->m_spanning_tree = std::move(rnd_spanning_tree);
+
+  auto time_stop = std::chrono::steady_clock::now();
+
+  // Assign the time elapsed
+  out_solution->m_time_for_solution =
+      std::chrono::duration_cast<std::chrono::milliseconds>(time_stop -
+                                                            time_start);
 }
 
 template<typename Graph, typename RndGenerator>
