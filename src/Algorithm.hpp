@@ -70,13 +70,12 @@ class Algorithm {
     MapAssignment m_assignment;
     size_t m_size_solution;
     SpanningTree<Graph> m_spanning_tree;
+    size_t m_number_odd_edges;
     std::chrono::milliseconds m_time_for_solution;
   };
 
   /// @brief Default constructor.
   Algorithm() = default;
-
-  void solve_problem(const Graph& graph, Solution* out_solution);
 
   void find_rnd_solution_fast(const Graph& graph, Solution* out_solution);
 
@@ -102,23 +101,24 @@ class Algorithm {
                                  EdgeFilter* cutset_output);
 
  private:
+  struct InstanceSolution {
+    MapAssignment m_assignment;
+    size_t m_size_solution;
+    EdgeFilter m_odd_edges;
+    size_t m_num_odd_edges;
+
+    /// @brief This is an intermediate solution based on
+    /// assignment of vertices respect with the spanning tree.
+    /// This assignment is usefull because is used by the
+    /// method to discover odd edges.
+    MapAssignment m_mapped_sp_based;
+  };
+
   RndGenerator m_rnd_engine;
 
   void solve_problem_for_a_tree(const Graph& graph,
                                 const SpanningTreeT& spanning_tree,
-                                MapAssignment* assignment,
-                                size_t* number_of_AB,
-                                EdgeFilter* odd_cotree_edges,
-                                MapAssignment* mapped_sp_based);
-
-  void find_the_best_solution(const Graph& graph,
-                              const SpanningTreeT& initial_spann_tree,
-                              const EdgeFilter& odd_edges,
-                              const size_t initial_size_solution,
-                              MapAssignment* p_assignment,
-                              size_t* p_number_of_AB,
-                              EdgeTransformation* p_transformation,
-                              MapAssignment* mapped_sp_based);
+                                InstanceSolution* output_solution);
 
   static size_t find_all_odd_cotree_edges(const Graph& graph,
                                           const MapAssignment& mapped_sp_based,
@@ -167,8 +167,7 @@ void Algorithm<Graph, RndGenerator>::find_rnd_solution_fast(
 
   // Local variables
   SpanningTreeT rnd_spanning_tree;
-  MapAssignment mapped_sp_based;
-  EdgeFilter odd_edges;
+  InstanceSolution local_solution;
 
   auto time_start = std::chrono::steady_clock::now();
 
@@ -178,17 +177,16 @@ void Algorithm<Graph, RndGenerator>::find_rnd_solution_fast(
   // Solve the problem
   solve_problem_for_a_tree(graph,
                            rnd_spanning_tree,
-                           &out_solution->m_assignment,
-                           &out_solution->m_size_solution,
-                           &odd_edges,
-                           &mapped_sp_based);
-
-
-  // Assign the spanning tree
-  // TODO(biagio): verificare che la move sia implementata e che non copy
-  out_solution->m_spanning_tree = std::move(rnd_spanning_tree);
+                           &local_solution);
 
   auto time_stop = std::chrono::steady_clock::now();
+
+  // Assign local solution on the output
+  // TODO(biagio): verificare che la move sia implementata e che non copy
+  out_solution->m_spanning_tree = std::move(rnd_spanning_tree);
+  out_solution->m_size_solution = std::move(local_solution.m_size_solution);
+  out_solution->m_assignment = std::move(local_solution.m_assignment);
+  out_solution->m_number_odd_edges = std::move(local_solution.m_num_odd_edges);
 
   // Assign the time elapsed
   out_solution->m_time_for_solution =
@@ -197,172 +195,37 @@ void Algorithm<Graph, RndGenerator>::find_rnd_solution_fast(
 }
 
 template<typename Graph, typename RndGenerator>
-void Algorithm<Graph, RndGenerator>::solve_problem(
-    const Graph& graph,
-    Solution* out_solution) {
-  assert(out_solution != nullptr);
-
-  SpanningTreeT rnd_spanning_tree;
-  MapAssignment local_assignment;
-  MapAssignment local_spbased_assignment;
-  EdgeFilter odd_edges;
-  size_t local_size;
-  EdgeTransformation local_transformation;
-
-  auto time_start = std::chrono::steady_clock::now();
-
-  // Generate the initial spanning tree
-  rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
-
-  // Solve the problem
-  solve_problem_for_a_tree(graph,
-                           rnd_spanning_tree,
-                           &out_solution->m_assignment,
-                           &out_solution->m_size_solution,
-                           &odd_edges,
-                           &local_spbased_assignment);
-
-  // Try to minimize
-  for (int i=0; i < 10; ) {
-    find_the_best_solution(graph,
-                           rnd_spanning_tree,
-                           odd_edges,
-                           out_solution->m_size_solution,
-                           &local_assignment,
-                           &local_size,
-                           &local_transformation,
-                           &local_spbased_assignment);
-
-    if (local_size < out_solution->m_size_solution) {
-      out_solution->m_size_solution = local_size;
-      out_solution->m_assignment = local_assignment;
-      rnd_spanning_tree.perform_transformation(graph,
-                                               local_transformation.first,
-                                               local_transformation.second);
-      find_all_odd_cotree_edges(graph,
-                                local_spbased_assignment,
-                                &odd_edges);
-      ++i;
-    } else {
-      rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
-      solve_problem_for_a_tree(graph,
-                               rnd_spanning_tree,
-                               &out_solution->m_assignment,
-                               &out_solution->m_size_solution,
-                               &odd_edges,
-                               &local_spbased_assignment);
-    }
-  }
-
-  auto time_stop = std::chrono::steady_clock::now();
-
-  out_solution->m_time_for_solution =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-      time_stop - time_start);
-    // TODO(biagio): the spanning tree must to be written in the solution
-}
-
-template<typename Graph, typename RndGenerator>
 void Algorithm<Graph, RndGenerator>::solve_problem_for_a_tree(
     const Graph& graph,
     const SpanningTreeT& spanning_tree,
-    MapAssignment* p_assignment,
-    size_t* p_number_of_AB,
-    EdgeFilter* odd_cotree_edges,
-    MapAssignment* mapped_sp_based) {
-  assert(p_assignment != nullptr);
-  assert(p_number_of_AB != nullptr);
-  assert(odd_cotree_edges != nullptr);
-  assert(mapped_sp_based != nullptr);
-
-  auto& assignment = *p_assignment;
+    InstanceSolution* output_solution) {
+  assert(output_solution != nullptr);
 
   const auto& spanning_tree_graph = spanning_tree.get_filtered_graph(graph);
   const auto& edges_in_spanning_tree =
       spanning_tree.get_edges_in_spanning_tree();
 
   // Preliminary assignment in according to the spanning tree
-  assign_accordance_spanning_tree(graph, spanning_tree_graph, p_assignment);
+  assign_accordance_spanning_tree(graph,
+                                  spanning_tree_graph,
+                                  &output_solution->m_assignment);
 
   // Fill mapped_spanning_tree-based
-  *mapped_sp_based = *p_assignment;
+  output_solution->m_mapped_sp_based = output_solution->m_assignment;
 
   // Find odd cotree edges
-  find_all_odd_cotree_edges(graph, *p_assignment, odd_cotree_edges);
+  output_solution->m_num_odd_edges =
+      find_all_odd_cotree_edges(graph,
+                                output_solution->m_assignment,
+                                &output_solution->m_odd_edges);
 
   // Assign V_ab group in according to odd cycles
-  EdgeFilter copy_odd_edges = *odd_cotree_edges;
+  EdgeFilter copy_odd_edges = output_solution->m_odd_edges;
   assign_accordance_odd_cycle(graph,
                               &copy_odd_edges,
-                              p_assignment,
-                              p_number_of_AB);
+                              &output_solution->m_assignment,
+                              &output_solution->m_size_solution);
 }
-
-template<typename Graph, typename RndGenerator>
-void Algorithm<Graph, RndGenerator>:: find_the_best_solution(
-    const Graph& graph,
-    const SpanningTreeT& initial_spann_tree,
-    const EdgeFilter& odd_edges,
-    const size_t initial_size_solution,
-    MapAssignment* p_assignment,
-    size_t* p_number_of_AB,
-    EdgeTransformation* p_transformation,
-    MapAssignment* p_mapped_sp_based) {
-  assert(p_assignment != nullptr);
-  assert(p_number_of_AB != nullptr);
-  assert(p_transformation != nullptr);
-  assert(p_mapped_sp_based != nullptr);
-
-  // Local variables and initializations
-  EdgeFilter cutset;
-  MapAssignment local_solution;
-  MapAssignment local_mapped_sp_assignment;
-  EdgeFilter local_odd_edges;
-  size_t local_size;
-  *p_number_of_AB = initial_size_solution;
-  auto copy_initial_tree = initial_spann_tree;
-
-  const auto& sp_graph = initial_spann_tree.get_filtered_graph(graph);
-  const auto tree_edges = edges(sp_graph);
-  std::for_each(tree_edges.first,
-                tree_edges.second,
-                [&]
-                (const EdgeType& et) {
-                  fundamental_cutset(graph,
-                                     initial_spann_tree,
-                                     et,
-                                     &cutset);
-
-                  for (const auto& ec : cutset) {
-                    if (ec.second == true &&
-                        odd_edges.at(ec.first) == true) {
-                      copy_initial_tree.perform_transformation(graph,
-                                                               ec.first,
-                                                               et);
-
-                      solve_problem_for_a_tree(graph,
-                                               copy_initial_tree,
-                                               &local_solution,
-                                               &local_size,
-                                               &local_odd_edges,
-                                               &local_mapped_sp_assignment);
-
-                      if (local_size < *p_number_of_AB) {
-                        *p_number_of_AB = local_size;
-                        *p_assignment = local_solution;
-                        *p_transformation = std::make_pair(ec.first, et);
-                        *p_mapped_sp_based = local_mapped_sp_assignment;
-                      }
-
-                      // Reverse transformation
-                      copy_initial_tree.perform_transformation(graph,
-                                                               et,
-                                                               ec.first);
-                    }
-                  }
-                });
-}
-
 
 template<typename Graph, typename RndGenerator>
 bool Algorithm<Graph, RndGenerator>::is_odd_cotree_edge(
