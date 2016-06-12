@@ -125,10 +125,10 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
   if (m_options.display_help == true) {
     print_help();
   } else {
-    auto seed = std::time(nullptr);
-    std::default_random_engine rnd_eng(seed);
-
     if (m_options.generate_random_matrix == true) {
+      auto seed = m_options.debug_seed ? m_options.seed : std::time(nullptr);
+      std::default_random_engine rnd_eng(seed);
+
       generate_random_matrix(&rnd_eng);
     } else {
       print_header();

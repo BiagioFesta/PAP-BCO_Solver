@@ -37,7 +37,7 @@ class Engine {
   void find_a_solution(const Graph& graph,
                        Solution* output_solution,
                        int seed = -1);
-  
+
   void find_a_solution_and_print(const Graph& graph,
                                  std::ostream* os,
                                  int seed = -1);
