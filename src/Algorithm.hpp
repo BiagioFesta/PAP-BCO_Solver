@@ -22,6 +22,7 @@
 
 #include <map>
 #include <algorithm>
+#include <limits>
 #include <queue>
 #include <ostream>
 #include <utility>
@@ -79,6 +80,8 @@ class Algorithm {
 
   void find_rnd_solution_fast(const Graph& graph, Solution* out_solution);
 
+  void best_local_solution(const Graph& graph, Solution* out_solution);
+
   /// @brief Sets the seed for the random engine.
   void set_seed(int seed);
 
@@ -116,9 +119,9 @@ class Algorithm {
 
   RndGenerator m_rnd_engine;
 
-  void solve_problem_for_a_tree(const Graph& graph,
-                                const SpanningTreeT& spanning_tree,
-                                InstanceSolution* output_solution);
+  static void solve_problem_for_a_tree(const Graph& graph,
+                                       const SpanningTreeT& spanning_tree,
+                                       InstanceSolution* output_solution);
 
   static size_t find_all_odd_cotree_edges(const Graph& graph,
                                           const MapAssignment& mapped_sp_based,
@@ -153,6 +156,25 @@ class Algorithm {
       const Graph& graph,
       const FilteredGraph& spanning_tree_graph,
       MapAssignment* assignment);
+
+  /// @brief The function find the best transformation for a random
+  ///        spanning tree.
+  /// @param [in] graph                The main graph of the problem
+  /// @param st                        A random spanning tree.
+  ///                                  Note that you don't have to generate
+  ///                                  the solution for that tree.
+  /// @param [out] out                 The best local solution for that tree.
+  /// @param [out] out_transformation  The best transformation you can perform
+  ///                                  on the tree in order to achive the
+  ///                                  best local solution.
+  /// @return 'true' if a transformation has been found, and it will be
+  ///    stored in the param 'out_transformation', otherwise 'false'
+  ///    that will mean the out param will be useless.
+  static bool find_best_local_solution_inTree(
+      const Graph& graph,
+      const SpanningTreeT& st,
+      InstanceSolution* out,
+      EdgeTransformation* out_transformation);
 };
 
 template<typename Graph, typename RndGenerator>
@@ -195,13 +217,58 @@ void Algorithm<Graph, RndGenerator>::find_rnd_solution_fast(
 }
 
 template<typename Graph, typename RndGenerator>
+void Algorithm<Graph, RndGenerator>::best_local_solution(
+    const Graph& graph, Solution* out_solution) {
+  assert(out_solution != nullptr);
+
+  // Function setting
+  static constexpr size_t NUMBER_OF_TREE_TO_GENERATE = 10;
+
+  // Local variables
+  SpanningTreeT rnd_spanning_tree;
+  InstanceSolution local_solution;
+  EdgeTransformation local_transformation;
+  out_solution->m_size_solution = std::numeric_limits<size_t>::max();
+
+  auto time_start = std::chrono::steady_clock::now();
+
+  for (size_t i = 0; i < NUMBER_OF_TREE_TO_GENERATE; ++i) {
+    // Generate a rnd spanning tree
+    rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
+
+    // Rafine the tree at the best you can
+    while (find_best_local_solution_inTree(graph, rnd_spanning_tree,
+                                           &local_solution,
+                                           &local_transformation) == true) {
+      rnd_spanning_tree.perform_transformation(graph,
+                                               local_transformation.first,
+                                               local_transformation.second);
+      if (local_solution.m_size_solution < out_solution->m_size_solution) {
+        out_solution->m_size_solution = local_solution.m_size_solution;
+        out_solution->m_assignment = std::move(local_solution.m_assignment);
+        out_solution->m_number_odd_edges = local_solution.m_num_odd_edges;
+      }
+    }
+  }
+
+  auto time_stop = std::chrono::steady_clock::now();
+  // Assign the time elapsed
+  out_solution->m_time_for_solution =
+      std::chrono::duration_cast<std::chrono::milliseconds>(time_stop -
+                                                            time_start);
+}
+
+template<typename Graph, typename RndGenerator>
 void Algorithm<Graph, RndGenerator>::solve_problem_for_a_tree(
     const Graph& graph,
     const SpanningTreeT& spanning_tree,
     InstanceSolution* output_solution) {
   assert(output_solution != nullptr);
 
-  const auto& spanning_tree_graph = spanning_tree.get_filtered_graph(graph);
+  const auto& spanning_tree_graph =
+      FilteredGraph(graph,
+                    PredicateFilterEdge(spanning_tree.
+                                        get_edges_in_spanning_tree()));
   const auto& edges_in_spanning_tree =
       spanning_tree.get_edges_in_spanning_tree();
 
@@ -530,6 +597,87 @@ void Algorithm<Graph, RndGenerator>::assign_accordance_odd_cycle(
       }
     }
   }
+}
+
+template<typename Graph, typename RndGenerator>
+bool Algorithm<Graph, RndGenerator>::find_best_local_solution_inTree(
+    const Graph& graph, const SpanningTreeT& st,
+    InstanceSolution* out, EdgeTransformation* out_transformation) {
+  assert(out != nullptr);
+  assert(out_transformation != nullptr);
+
+  // Local variables
+  EdgeFilter cutset;
+  SpanningTreeT sp_copy = st;
+  InstanceSolution local_solution;
+  bool rts =  false;
+
+  // Find the initial solution
+  solve_problem_for_a_tree(graph, st, out);
+
+  // View on spanning tree
+  const auto&& sp_graph =
+      FilteredGraph(graph,
+                    PredicateFilterEdge(st.get_edges_in_spanning_tree()));
+
+  // For each edge in the spanning tree
+  const auto& all_edges = edges(sp_graph);
+  std::for_each(all_edges.first,
+                all_edges.second,
+                [&]
+                (const EdgeType& e_sp) {
+                  fundamental_cutset(graph, st, e_sp, &cutset);
+
+                  // For each edge in the cuset
+                  std::for_each(
+                      cutset.cbegin(),
+                      cutset.cend(),
+                      [&]
+                      (const typename EdgeFilter::value_type& pe_cuset) {
+                        // This edge of the cutset
+                        const auto& e_ct = pe_cuset.first;
+
+                        // Check if the edge belong to the cutset and
+                        // it is odd
+                        if (pe_cuset.second == true &&
+                            out->m_odd_edges[e_ct] == true &&
+                            e_ct != e_sp) {
+                          // Perform the transformation
+                          sp_copy.perform_transformation(graph, e_ct, e_sp);
+
+                          // Solve the problem for the new tree
+                          solve_problem_for_a_tree(graph,
+                                                   sp_copy,
+                                                   &local_solution);
+
+                          // Check whether the new solution is better
+                          if (local_solution.m_size_solution <
+                              out->m_size_solution) {
+                            // Set the new solution
+                            out->m_size_solution =
+                                local_solution.m_size_solution;
+                            out->m_assignment = std::move(
+                                local_solution.m_assignment);
+                            out->m_odd_edges = std::move(
+                                local_solution.m_odd_edges);
+                            out->m_num_odd_edges =
+                                local_solution.m_num_odd_edges;
+                            out->m_mapped_sp_based = std::move(
+                                local_solution.m_mapped_sp_based);
+
+                            // Set the transformation as better so far
+                            *out_transformation = std::make_pair(e_ct, e_sp);
+
+                            // Change the flag result
+                            rts = true;
+                          }
+
+                          // Reverse the transformation
+                          sp_copy.perform_transformation(graph, e_sp, e_ct);
+                        }
+                      });
+                });
+  return rts;
 }
 
 

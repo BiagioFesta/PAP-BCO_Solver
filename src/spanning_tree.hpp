@@ -208,7 +208,7 @@ template<typename Graph>
 bool SpanningTree<Graph>::this_is_a_valid_spanning_tree(
     const Graph& graph) {
   // A valid spanning tree must have no cycle
-  const auto filtered_graph = get_filtered_graph(graph);
+  const auto& filtered_graph = get_filtered_graph(graph);
 
   // Check whether the spanning tree contains loops.
   return GraphUtility::graph_contains_loop(filtered_graph) ?
