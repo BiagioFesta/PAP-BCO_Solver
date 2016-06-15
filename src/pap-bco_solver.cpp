@@ -190,12 +190,19 @@ void PAP_BCO_Solver::print_help() const noexcept {
       R"##(
 Use: pap-bco_solver [OPTION]... [FILENAME]
    Command Options:
+
+[FILENAME]                     It's the input (or output if --generate option has been
+                               specified) of the adjacency matrix.
+                               If it's not specified then the matrix will be read from
+                               the std input (or generated to the std output).
+
 -c, --compresed                Specify whether the input matrix is a compressed format or not.
 -g SIZE[:PERC], --generate SIZE[:PERC]
                                Generate a valid random matrix with dimention SIZE.
                                PERC is a real number between 0 and 1 and represents
                                the probability to generate a 1 in the matrix.
 -h, --help                     Display this guide.
+-s, --seed NUM                 Specify the seed for random generator.
 
 )##";
 }
