@@ -29,9 +29,9 @@ struct ProgramOptions {
   std::string input_filename;
   bool compressed_matrix = false;
   bool display_help = false;
-  bool generate_random_matrix = false;
-  size_t size_generation_matrix = 0;
-  float perc_one_into_gen_matrix = 0.5;
+  bool generate_random_graph = false;
+  size_t generate_num_vertices = 0;
+  size_t generate_num_edges = 0;
   bool debug_seed = false;
   int seed = 0;
 };

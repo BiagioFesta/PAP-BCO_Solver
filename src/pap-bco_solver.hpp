@@ -43,7 +43,6 @@ class PAP_BCO_Solver {
  private:
   ProgramOptions m_options;
   Graph m_graph;
-  MatrixParser m_mat_parser;
 
   /// @brief Parse the program option through the command line.
   int parse_cmdline_options(int argc, char* argv[]);
@@ -73,19 +72,15 @@ void PAP_BCO_Solver::generate_random_matrix(RND* rnd_engine) const {
     file.open(m_options.input_filename);
     os = &file;
   }
-  if (m_options.compressed_matrix == true) {
-    m_mat_parser.generate_rnd_compressed_matrix(
-        rnd_engine,
-        m_options.size_generation_matrix,
-        os,
-        m_options.perc_one_into_gen_matrix);
-  } else {
-    m_mat_parser.generate_rnd_matrix(
-        rnd_engine,
-        m_options.size_generation_matrix,
-        os,
-        m_options.perc_one_into_gen_matrix);
-  }
+
+  Graph local_graph;
+  MatrixParser::generate_random_graph(m_options.generate_num_vertices,
+                                      m_options.generate_num_edges,
+                                      &local_graph,
+                                      rnd_engine);
+
+  MatrixParser::print_graph_raw(local_graph, os);
+
   if (m_options.input_filename.size() != 0) {
     file.close();
   }

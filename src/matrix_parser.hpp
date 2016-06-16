@@ -23,245 +23,83 @@
 
 #include <istream>
 #include <ostream>
-#include <string>
-#include <random>
+#include <vector>
+#include <boost/graph/random.hpp>
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
+#include <boost/graph/adj_list_serialize.hpp>
 
 namespace pap_solver {
 
 class MatrixParser {
  public:
-  /// \brief It parses a compressed matrix and fills the relative graph.
-  ///        The matrix must to be in the compressed form:
-  ///              a12   a13    a14    ...   a1n
-  ///              a23   a24    ...    a2n
-  ///              ...
-  ///              a(n-1)(n)
-  ///
-  /// \param [in] is        An input stream where the matrix is stored
-  ///                       as text file.
-  /// \param [out] g        The graph has to be generated.
-  ///                       The graph passed must to be empty.
-  /// \param [in] add_edge  Is a object function which performs the operation
-  ///                       of insertion of an edge into the graph.
-  ///                       Concept:    void (&)(VertexType, VertexType, Graph)
-  template<typename Graph,
-           typename AddEdge>
-  void parse_compressed_matrix(std::istream* is,
-                               Graph* g,
-                               AddEdge add_edge) const;
+  template<typename Graph, typename RndEngine>
+  static void generate_random_graph(const size_t num_vertices,
+                                    const size_t num_edges,
+                                    Graph* output_graph,
+                                    RndEngine* rnd_engine);
+  template<typename Graph>
+  static void print_graph_raw(const Graph& graph, std::ostream* out_stream);
 
-  /// \brief It prarses a full matrix (not compressed) and filles the relative
-  ///        graph
-  /// \param [in] is       An input stream where the matric is stored
-  ///                      as text file.
-  /// \param [out] g       The graph has to be generated.
-  ///                      The graph passed must to be empty.
-  /// \param [in] add_edge Is an object function which perform the operatiorn
-  ///                      of insertion of an edge into the graph.
-  /// \see                 MatrxiParser::parse_compressed_matrix.
-  template<typename Graph,
-           typename AddEdge>
-  void parse_full_matrix(std::istream* is,
-                         Graph* g,
-                         AddEdge add_edge) const;
-
-
-  /// @brief Generate a random compressed matrix
-  ///
-  /// @param [in] rnd_engine     A valid random engine.
-  /// @param [in] matrix_size    The size of the matrix.
-  /// @param [out] os            An output stream where the matrix
-  ///                            will be written.
-  template<typename RND>
-  void generate_rnd_compressed_matrix(RND* rnd_engine,
-                                      size_t matrix_size,
-                                      std::ostream* os,
-                                      float one_percent = 0.05f) const;
-
-  template<typename RND>
-  void generate_rnd_matrix(RND* rnd_engine,
-                           size_t matrix_size,
-                           std::ostream* os,
-                           float one_percent = 0.05f) const;
+  template<typename Graph>
+  static void read_graph_raw(std::istream* in_stream, Graph* graph);
 };
 
+template<typename Graph, typename RndEngine>
+void MatrixParser::generate_random_graph(const size_t num_vertices,
+                                         const size_t num_edges,
+                                         Graph* output_graph,
+                                         RndEngine* rnd_engine) {
+  assert(output_graph != nullptr);
+  assert(rnd_engine != nullptr);
 
+  static_assert(std::is_integral<typename Graph::vertex_descriptor>::value,
+                "The vertex type (descriptor) must to be a integer type!");
 
+  output_graph->clear();
 
-template<typename Graph,
-         typename AddEdge>
-void MatrixParser::parse_compressed_matrix(std::istream* is,
-                                           Graph* g,
-                                           AddEdge add_edge) const {
-  // TODO(biagio): you should check whether the graph is empty or not.
-  std::string sstream((std::istreambuf_iterator<char>(*is)),
-                      std::istreambuf_iterator<char>());
-  size_t current_vertex = 0;
-  size_t current_column = 1;
-  size_t prev_lenght_line = 0;
-  for (const auto&c : sstream) {
-    if (prev_lenght_line > 0 && current_column > prev_lenght_line) {
-      throw std::runtime_error("Parsing error, line too long.");
-    }
-    switch (c) {
-      case 48:  // ASCII for 0
-        ++current_column;
-        break;
-      case 49:  // ASCII for 1
-        add_edge(current_vertex, current_column, g);
-        ++current_column;
-        break;
-      case 10:  // ASCII for \n
-        if (prev_lenght_line > 0 && current_column != prev_lenght_line) {
-          throw std::runtime_error("Parsing error, line too short.");
-        } else if (prev_lenght_line == 0 && current_column == 1) {
-          throw std::runtime_error("Cannot parse an empty matrix");
-        }
-        prev_lenght_line = current_column;
-        ++current_vertex;
-        current_column = current_vertex + 1;
-      default:  // Pass away for other any char
-        break;
-    }
-  }
-  if (current_vertex == 0) {
-    throw std::runtime_error("Cannot parse an empty matrix");
-  }
+  boost::generate_random_graph(*output_graph,
+                               num_vertices,
+                               num_edges,
+                               *rnd_engine,
+                               false);
+
+  const auto vertices = boost::vertices(*output_graph);
+  int added_edges = 0;
+  std::for_each(vertices.first,
+                vertices.second,
+                [&] (const typename Graph::vertex_descriptor& v) {
+                  if (boost::out_degree(v, *output_graph) == 0) {
+                    std::uniform_int_distribution<size_t> ovr(0, num_vertices);
+
+                    auto ov = ovr(*rnd_engine);
+                    while (ov == v) ov = ovr(*rnd_engine);
+
+                    boost::add_edge(v, ov, *output_graph);
+                    ++added_edges;
+                  }
+                });
 }
 
-template<typename Graph,
-         typename AddEdge>
-void MatrixParser::parse_full_matrix(std::istream* is,
-                                     Graph* g,
-                                     AddEdge add_edge) const {
-  static constexpr size_t SIZE_TEMP_BUFFER = 1024;
-  auto tbuffer = std::get_temporary_buffer<char>(SIZE_TEMP_BUFFER);
-  if (tbuffer.second != SIZE_TEMP_BUFFER) {
-    throw std::runtime_error("Bad memory allocation");
-  }
+template<typename Graph>
+void MatrixParser::print_graph_raw(const Graph& graph,
+                                   std::ostream* out_stream) {
+  assert(out_stream != nullptr);
 
-  size_t current_vertex = 0;
-  size_t current_column = 1;
-  size_t matrix_size = 0;
-  size_t panning = 0;
-
-  while (is->eof() == false) {
-    panning = current_vertex + 1;
-    is->getline(tbuffer.first, tbuffer.second);
-    if (std::strlen(tbuffer.first) == 0) continue;
-    char* i = tbuffer.first;
-    while (*i != 0) {
-      switch (*i) {
-        case 48:  // ASCII for 0
-          if (panning > 0) {
-            --panning;
-          } else {
-            ++current_column;
-          }
-          break;
-        case 49:  // ASCII for 1
-          if (panning > 0) {
-            --panning;
-          } else {
-            add_edge(current_vertex, current_column, g);
-            ++current_column;
-          }
-          break;
-        default:  // Pass away for other any char
-          break;
-      }
-      ++i;
-    }
-    if (matrix_size == 0) {
-      matrix_size = current_column;
-    } else {
-      if (matrix_size != current_column) {
-        throw std::runtime_error("Parsing error");
-      }
-    }
-    ++current_vertex;
-    current_column = current_vertex + 1;
-  }
-  if (current_vertex == 0) {
-    throw std::runtime_error("Cannot parse an empty matrix");
-  }
-  std::return_temporary_buffer(tbuffer.first);
+  boost::archive::text_oarchive archive(*out_stream);
+  archive << graph;
 }
 
-template<typename RND>
-void MatrixParser::generate_rnd_compressed_matrix(RND* rnd_engine,
-                                                  size_t matrix_size,
-                                                  std::ostream* os,
-                                                  float one_percent) const {
-  if (one_percent > 1.f || one_percent <= 0) {
-    throw std::runtime_error("Bad argument");
-  }
-  if (matrix_size == 0) return;
-  // 48 and 49 are '0' and '1' in the ASCII codec
-  std::uniform_real_distribution<> rnd_value(0, 1);
+template<typename Graph>
+void MatrixParser::read_graph_raw(std::istream* in_stream,
+                                  Graph* graph) {
+  assert(in_stream != nullptr);
+  assert(graph != nullptr);
 
-  auto tbuffer = std::get_temporary_buffer<char>(matrix_size);
-  if (tbuffer.first == nullptr) {
-    throw std::runtime_error("I cannot generate random matrix, "
-                             "bad memory allocation");
-  }
-  size_t i;
-  size_t row_size = matrix_size - 1;
-  while (row_size) {
-    for (i = 0; i < row_size; ++i) {
-      tbuffer.first[i] = rnd_value(*rnd_engine) < one_percent? '1' : '0';
-    }
-    // We cannot have a vertex without outgoing edge
-    if (std::memchr(tbuffer.first, '1', row_size) == nullptr) {
-      // We have a row with all zeros. Just change on of them!
-      tbuffer.first[0] = '1';
-    }
-    os->write(tbuffer.first, row_size);
-    os->put('\n');
-    --row_size;
-  }
-  std::return_temporary_buffer(tbuffer.first);
+  boost::archive::text_iarchive archive(*in_stream);
+  archive >> *graph;
 }
 
-template<typename RND>
-void MatrixParser::generate_rnd_matrix(RND* rnd_engine,
-                                       size_t matrix_size,
-                                       std::ostream* os,
-                                       float one_percent) const {
-  if (one_percent > 1.f || one_percent <= 0) {
-    throw std::runtime_error("Bad argument");
-  }
-  if (matrix_size == 0) return;
-  std::uniform_real_distribution<> rnd_value(0, 1);
-  char* matrix_data = new char[matrix_size*matrix_size];
-  for (auto i = 0u; i < matrix_size; ++i) {
-    // Generate the i-th row of the matrix
-    for (auto j = 0u; j < i; ++j) {
-      // Generate the j-th column of the matrix with known data.
-      matrix_data[i*matrix_size + j] = matrix_data[j*matrix_size + i];
-    }
-    for (auto j = i; j < matrix_size; ++j) {
-      // Generate the j-th column of the matrix with new data.
-      char data_element;
-      if (j == i) {
-        data_element = '0';
-      } else {
-        data_element = rnd_value(*rnd_engine) < one_percent? '1' : '0';
-      }
-      matrix_data[i*matrix_size + j] = data_element;
-    }
-    if (std::memchr(matrix_data + (i*matrix_size + i),
-                    '1',
-                    matrix_size - i) == nullptr
-        && i != matrix_size - 1) {
-      // We have a row with all zeros after the mid!. Just change on of them!
-      matrix_data[i*matrix_size + matrix_size - 1] = '1';
-    }
-    os->write(matrix_data + (i*matrix_size), matrix_size);
-    os->put('\n');
-  }
-  delete[] matrix_data;
-}
 
 }  // namespace pap_solver
 

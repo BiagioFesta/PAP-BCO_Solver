@@ -79,29 +79,24 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
           return -1;
         }
         break;
-      case 'g': {
-        m_options.generate_random_matrix = true;
-        std::string temp_arg = optarg;
-        try {
+      case 'g': try {
+          std::string temp_arg = optarg;
           auto finder = temp_arg.find(':');
-          m_options.size_generation_matrix =
-              std::stoi(temp_arg.substr(0, finder));
-          if (finder != std::string::npos) {
-            m_options.perc_one_into_gen_matrix =
-                std::stof(temp_arg.substr(finder + 1));
+          if (finder == std::string::npos) {
+            throw std::invalid_argument("NEDGES not specified.");
           }
+
+          m_options.generate_random_graph = true;
+
+          m_options.generate_num_vertices =
+              std::stoi(temp_arg.substr(0, finder));
+
+          m_options.generate_num_edges =
+                std::stoi(temp_arg.substr(finder + 1));
         } catch (const std::exception& err) {
-          std::cerr << "--generate NUMBER[:PERC]\n"
-              "NUMBER must to be a integer number!\n";
+          std::cerr << "--generate NVERTICES:NEDGES\n";
           return -1;
         }
-        if (m_options.perc_one_into_gen_matrix > 1.f ||
-            m_options.perc_one_into_gen_matrix <= 0) {
-          std::cerr << "--generate NUMBER[:PERC]\n"
-              "PERC must to be a float number between 0 and 1\n";
-          return -1;
-        }
-      }
         break;
       case '?':
         return -1;
@@ -125,7 +120,7 @@ void PAP_BCO_Solver::run(int argc, char* argv[]) {
   if (m_options.display_help == true) {
     print_help();
   } else {
-    if (m_options.generate_random_matrix == true) {
+    if (m_options.generate_random_graph == true) {
       auto seed = m_options.debug_seed ? m_options.seed : std::time(nullptr);
       std::default_random_engine rnd_eng(seed);
 
@@ -159,49 +154,33 @@ void PAP_BCO_Solver::parse_matrix() {
     is = &file;
   }
 
-  auto add_edge_function = [](size_t v1, size_t v2, Graph* g) {
-    boost::add_edge(v1, v2, *g);
-  };
-  std::function<void(void)>function_parse_matrix;
-  if (m_options.compressed_matrix == true) {
-    function_parse_matrix = std::bind(
-        &MatrixParser::parse_compressed_matrix
-        <Graph, decltype(add_edge_function)>,
-        m_mat_parser,
-        is,
-        &m_graph,
-        add_edge_function);
-  } else {
-    function_parse_matrix = std::bind(
-        &MatrixParser::parse_full_matrix
-        <Graph, decltype(add_edge_function)>,
-        m_mat_parser,
-        is,
-        &m_graph,
-        add_edge_function);
-  }
-  function_parse_matrix();
-  if (file.is_open())
+  MatrixParser::read_graph_raw(is, &m_graph);
+
+  if (file.is_open()) {
     file.close();
+  }
 }
 
 void PAP_BCO_Solver::print_help() const noexcept {
   std::cout <<
       R"##(
-Use: pap-bco_solver [OPTION]... [FILENAME]
+
+Use:    pap-bco_solver [OPTION]... [FILENAME]
    Command Options:
 
-[FILENAME]                     It's the input (or output if --generate option has been
+FILENAME                       It's the input (or output if --generate option has been
                                specified) of the adjacency matrix.
                                If it's not specified then the matrix will be read from
                                the std input (or generated to the std output).
 
 -c, --compresed                Specify whether the input matrix is a compressed format or not.
--g SIZE[:PERC], --generate SIZE[:PERC]
-                               Generate a valid random matrix with dimention SIZE.
-                               PERC is a real number between 0 and 1 and represents
-                               the probability to generate a 1 in the matrix.
+
+-g NVERTICES:NEDGES,
+--generate NVERTICES:NEDGES    Generate a valid random graph  with NVERTICES and NEDGES.
+                               Both those numbers must to be integer numbers.
+
 -h, --help                     Display this guide.
+
 -s, --seed NUM                 Specify the seed for random generator.
 
 )##";

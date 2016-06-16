@@ -9,12 +9,15 @@ SET( ${PROJECT_NAME}_MINOR_VERSION 0 )
 SET( ${PROJECT_NAME}_PATCH_LEVEL 1 )
 
 # Find Boost Graph
-find_package(Boost COMPONENTS graph)
+find_package(Boost COMPONENTS graph serialization)
 link_directories(${Boost_LIBRARY_DIRS})
 include_directories(BEFORE ${Boost_INCLUDE_DIRS})
 
 # Exec
 add_executable(${PROJECT_NAME} "./src/pap-bco_solver.cpp")
+
+# Linker Libraries
+target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES})
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU"   OR   "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     include(CheckCXXCompilerFlag)
