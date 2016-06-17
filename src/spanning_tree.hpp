@@ -52,7 +52,7 @@ class SpanningTree {
     explicit PredicateFilterEdge(const EdgeFilter& map) :
         m_edges_map(map) {
     }
-    inline bool operator()(const EdgeType e) const {
+    inline bool operator()(const EdgeType& e) const {
       return boost::get(m_edges_map, e);
     }
 
