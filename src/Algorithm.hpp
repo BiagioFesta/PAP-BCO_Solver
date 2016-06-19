@@ -248,7 +248,7 @@ void Algorithm<Graph, RndGenerator>::best_local_solution(
   assert(out_solution != nullptr);
 
   // Function setting
-  static constexpr size_t NUMBER_OF_TREE_TO_GENERATE = 10;
+  static constexpr size_t NUMBER_OF_TREE_TO_GENERATE = 100;
 
   // Local variables
   SpanningTreeT rnd_spanning_tree;
@@ -847,6 +847,7 @@ bool Algorithm<Graph, RndGenerator>::find_best_local_solution_inTree_heristic(
           }
         });
 
+    bool better_found = false;
     for (const auto& e : cand_edges_to_swap) {
       // Apply transformation in order to try to remove the cycle.
       sp_copy.perform_transformation(graph, local_edge, e);
@@ -872,12 +873,14 @@ bool Algorithm<Graph, RndGenerator>::find_best_local_solution_inTree_heristic(
 
         // Set the transformation as better so far
         *out_transformation = std::make_pair(local_edge, e);
+
+        better_found = true;
       }
 
       // Reverse the transformation
       sp_copy.perform_transformation(graph, e, local_edge);
     }
-    return true;
+    return better_found;
   }
   return false;
 }
