@@ -82,9 +82,9 @@ class Algorithm {
 
   void find_rnd_solution_fast(const Graph& graph, Solution* out_solution);
 
-  void best_local_solution(const Graph& graph, Solution* out_solution);
+  void best_local_search_solution(const Graph& graph, Solution* out_solution);
 
-  void best_local_solution_h(const Graph& graph, Solution* out_solution);
+  void best_local_aoc_solution(const Graph& graph, Solution* out_solution);
 
   /// @brief Sets the seed for the random engine.
   void set_seed(int seed);
@@ -180,11 +180,11 @@ class Algorithm {
       InstanceSolution* out,
       EdgeTransformation* out_transformation);
 
-  static bool find_best_local_solution_inTree_heristic(
+  static bool find_best_local_solution_inTree_aoc(
       const Graph& graph,
       const SpanningTreeT& st,
       InstanceSolution* out,
-      EdgeTransformation* out_transformation);
+      std::vector< EdgeTransformation >* out_transformations);
 
   /// @brief Cycle detection algorithm for UNDIRECTED GRAPH!
   ///
@@ -198,9 +198,9 @@ class Algorithm {
   /// @note The output parameter will be modified even if the result will
   /// be false. In that case the value will be no sense.
   template<typename GenericGraph, typename EdgeDescriptor>
-  static bool a_cycle_detection(const GenericGraph& graph,
-                                const size_t num_vertices,
-                                EdgeDescriptor* edge_in_cycle);
+  static void some_cycles_detection(const GenericGraph& graph,
+                                    const size_t num_vertices,
+                                    std::vector<EdgeDescriptor>* edge_in_cycle);
 };
 
 template<typename Graph, typename RndGenerator>
@@ -243,12 +243,12 @@ void Algorithm<Graph, RndGenerator>::find_rnd_solution_fast(
 }
 
 template<typename Graph, typename RndGenerator>
-void Algorithm<Graph, RndGenerator>::best_local_solution(
+void Algorithm<Graph, RndGenerator>::best_local_search_solution(
     const Graph& graph, Solution* out_solution) {
   assert(out_solution != nullptr);
 
   // Function setting
-  static constexpr size_t NUMBER_OF_TREE_TO_GENERATE = 100;
+  static constexpr size_t NUMBER_OF_TREE_TO_GENERATE = 10;
 
   // Local variables
   SpanningTreeT rnd_spanning_tree;
@@ -263,9 +263,9 @@ void Algorithm<Graph, RndGenerator>::best_local_solution(
     rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
 
     // Rafine the tree at the best you can
-    while (find_best_local_solution_inTree_heristic(graph, rnd_spanning_tree,
-                                                    &local_solution,
-                                                    &local_transformation) == true) {
+    while (find_best_local_solution_inTree(graph, rnd_spanning_tree,
+                                           &local_solution,
+                                           &local_transformation) == true) {
       rnd_spanning_tree.perform_transformation(graph,
                                                local_transformation.first,
                                                local_transformation.second);
@@ -273,7 +273,59 @@ void Algorithm<Graph, RndGenerator>::best_local_solution(
         out_solution->m_size_solution = local_solution.m_size_solution;
         out_solution->m_assignment = std::move(local_solution.m_assignment);
         out_solution->m_number_odd_edges = local_solution.m_num_odd_edges;
+        }
+    }
+
+    if (local_solution.m_size_solution < out_solution->m_size_solution) {
+      out_solution->m_size_solution = local_solution.m_size_solution;
+      out_solution->m_assignment = std::move(local_solution.m_assignment);
+      out_solution->m_number_odd_edges = local_solution.m_num_odd_edges;
+    }
+  }
+
+  auto time_stop = std::chrono::steady_clock::now();
+  // Assign the time elapsed
+  out_solution->m_time_for_solution =
+      std::chrono::duration_cast<std::chrono::milliseconds>(time_stop -
+                                                            time_start);
+}
+
+template<typename Graph, typename RndGenerator>
+void Algorithm<Graph, RndGenerator>::best_local_aoc_solution(
+    const Graph& graph, Solution* out_solution) {
+  assert(out_solution != nullptr);
+
+  // Function setting
+  static constexpr size_t NUMBER_OF_TREE_TO_GENERATE = 100;
+
+  // Local variables
+  SpanningTreeT rnd_spanning_tree;
+  InstanceSolution local_solution;
+  std::vector<EdgeTransformation> local_transformations;
+  local_transformations.reserve(boost::num_vertices(graph));
+  out_solution->m_size_solution = std::numeric_limits<size_t>::max();
+
+  auto time_start = std::chrono::steady_clock::now();
+
+  for (size_t i = 0; i < NUMBER_OF_TREE_TO_GENERATE; ++i) {
+    // Generate a rnd spanning tree
+    rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
+
+    // Rafine the tree at the best you can
+    while (find_best_local_solution_inTree_aoc(
+               graph, rnd_spanning_tree,
+               &local_solution, &local_transformations) == true) {
+      for (const auto& transf : local_transformations) {
+        rnd_spanning_tree.perform_transformation(graph,
+                                                 transf.first,
+                                                 transf.second);
       }
+
+      if (local_solution.m_size_solution < out_solution->m_size_solution) {
+        out_solution->m_size_solution = local_solution.m_size_solution;
+        out_solution->m_assignment = std::move(local_solution.m_assignment);
+        out_solution->m_number_odd_edges = local_solution.m_num_odd_edges;
+      }      
     }
 
     if (local_solution.m_size_solution < out_solution->m_size_solution) {
@@ -714,11 +766,11 @@ bool Algorithm<Graph, RndGenerator>::find_best_local_solution_inTree(
 
 template<typename Graph, typename RndGenerator>
 template<typename GenericGraph, typename EdgeDescriptor>
-bool Algorithm<Graph, RndGenerator>::a_cycle_detection(
+void Algorithm<Graph, RndGenerator>::some_cycles_detection(
     const GenericGraph& graph,
     const size_t num_vertices,
-    EdgeDescriptor* edge_in_cycle) {
-  assert(edge_in_cycle != nullptr);
+    std::vector<EdgeDescriptor>* edges_in_cycle) {
+  assert(edges_in_cycle != nullptr);
   if (num_vertices == 0) {
     throw std::invalid_argument(
         "Cycle detection algorithm with empty graph has been called.");
@@ -729,101 +781,102 @@ bool Algorithm<Graph, RndGenerator>::a_cycle_detection(
   static_assert(std::is_integral<Vertex>::value,
                 "The vertex type (descriptor) must to be a integer type!");
   typedef std::stack<std::pair<Vertex, Vertex>> OpenList;
-  // TODO(biagio): essendo integere i vertici puoi anche usare un array
-  // indicizzato dai vertici stessi! Lo spazio sarebbe lo stesso
-  typedef std::unordered_map<Vertex, void*> ClosedList;
+  typedef std::vector<bool> ClosedList;
 
   // Algorithm idea: Depth First Search for at most the number of vertices.
   // Since at most n − 1 edges can be tree edges, a cycle has to be
   // discovered before UNDIRECTED GRAPH!
 
+  edges_in_cycle->clear();
+
   OpenList open_list;
   ClosedList closed_list;
-  closed_list.reserve(num_vertices);
+  closed_list.resize(num_vertices, false);
 
-  const auto& vertices = boost::vertices(graph);
-  open_list.push(std::make_pair(*vertices.first, *vertices.second));
+  auto vertices = boost::vertices(graph);
+  open_list.push(std::make_pair(*(vertices.first), *(vertices.second)));
 
-  bool cycle_detected = false;
-  while (open_list.empty() == false && cycle_detected == false) {
+  size_t node_explored = 0;
+  while (node_explored < num_vertices) {
     const auto current_node = open_list.top().first;
     const auto current_parent = open_list.top().second;
-    closed_list[current_node] = nullptr;
     open_list.pop();
 
-    const auto adj_vertices = boost::adjacent_vertices(current_node, graph);
-    std::for_each(adj_vertices.first,
-                  adj_vertices.second,
-                  [&] (const Vertex& adj_v) {
-                    if (closed_list.find(adj_v) == closed_list.cend()) {
-                      open_list.push(std::make_pair(adj_v, current_node));
-                    } else if (adj_v != current_parent) {
-                      auto edge_link =
-                          boost::edge(adj_v, current_node, graph);
-                      assert(edge_link.second == true);
-                      *edge_in_cycle = edge_link.first;
-                      cycle_detected = true;
-                    }
-                  });
+    if (closed_list[current_node] == false) {
+      // Insert the current in the closed list
+      closed_list[current_node] = true;
+      ++node_explored;
 
-    // Since the graph could be disconnected
-    if (cycle_detected == false &&
-        open_list.empty() == true &&
-        closed_list.size() < num_vertices) {
+      const auto adjacent_vertices =
+          boost::adjacent_vertices(current_node, graph);
+      std::for_each(
+          adjacent_vertices.first, adjacent_vertices.second,
+          [&] (const Vertex& adj_v) {
+            if (closed_list[adj_v] == false) {
+              open_list.push(std::make_pair(adj_v, current_node));
+            } else if (adj_v != current_parent) {
+              auto edge_link = boost::edge(adj_v, current_node, graph);
+              assert(edge_link.second == true);
+              edges_in_cycle->push_back(edge_link.first);
+            }
+          });
+    }
+
+    if (open_list.empty()) {
       // No cycle but there still are vertices to explore
       const auto finder = std::find_if(
           vertices.first, vertices.second,
           [&] (const Vertex& v) {
-            if (closed_list.find(v) == closed_list.cend()) {
-              return true;
-            }
-            return false;
+            return !closed_list[v];
           });
-      assert(finder != vertices.second);
-      open_list.push(std::make_pair(*finder, *vertices.second));
+      if (finder != vertices.second) {
+        open_list.push(std::make_pair(*finder, *vertices.second));
+      }
     }
   }
-
-  return cycle_detected;
 }
 
 template<typename Graph, typename RndGenerator>
-bool Algorithm<Graph, RndGenerator>::find_best_local_solution_inTree_heristic(
+bool Algorithm<Graph, RndGenerator>::find_best_local_solution_inTree_aoc(
     const Graph& graph,
     const SpanningTreeT& st,
     InstanceSolution* out,
-    EdgeTransformation* out_transformation) {
+    std::vector<EdgeTransformation>* out_transformations) {
   assert(out != nullptr);
-  assert(out_transformation != nullptr);
+  assert(out_transformations != nullptr);
 
   // Local variables
   EdgeFilter cutset;
-  EdgeType local_edge;
+  std::vector<EdgeType> local_edges;
+  bool better_found = false;
   SpanningTreeT sp_copy = st;
   InstanceSolution local_solution;
+  EdgeTransformation local_transformation;
   const auto num_vertices = boost::num_vertices(graph);
   const auto num_edges = boost::num_edges(graph);
+
+  // Reset output
+  out_transformations->clear();
+  out_transformations->reserve(num_vertices);
 
   // Find the initial solution
   solve_problem_for_a_tree(graph, st, out);
 
   // View on spanning tree
-  const auto& edges_in_tree = st.get_edges_in_spanning_tree();
-  const auto&& sp_graph =
-      FilteredGraph(graph,
-                    PredicateFilterEdge(edges_in_tree));
+  const auto& edges_in_tree = sp_copy.get_edges_in_spanning_tree();
+  auto&& sp_graph =
+      FilteredGraph(graph, PredicateFilterEdge(edges_in_tree));
 
   // View on odd co-tree graph
   const auto&& odd_graph =
-      FilteredGraph(graph,
-                    PredicateFilterEdge(out->m_odd_edges));
+      FilteredGraph(graph, PredicateFilterEdge(out->m_odd_edges));
 
-  // Find a cycle in the odd graph
-  if (a_cycle_detection(odd_graph, num_vertices, &local_edge)) {
+  // Find some cycles in the odd graph
+  local_edges.reserve(num_edges);
+  some_cycles_detection(odd_graph, num_vertices, &local_edges);
+  for (const auto& odd_edge_loop : local_edges) {
     // Find all edges we could swap
     std::vector<EdgeType> cand_edges_to_swap;
-
-    // TODO(biagio): troppo pessimistico!
     cand_edges_to_swap.reserve(num_edges);
 
     // TODO(biagio): this algorithm is a brute force. No good performance
@@ -831,15 +884,12 @@ bool Algorithm<Graph, RndGenerator>::find_best_local_solution_inTree_heristic(
     std::for_each(
         edges_in_stree.first, edges_in_stree.second,
         [&] (const EdgeType& e) {
-          fundamental_cutset(graph, st, e, &cutset);
+          fundamental_cutset(graph, sp_copy, e, &cutset);
 
           const auto finder = std::find_if(
               cutset.cbegin(), cutset.cend(),
               [&] (const typename decltype(cutset)::value_type& p) {
-                if (p.second == true && p.first == local_edge) {
-                  return true;
-                }
-                return false;
+                return (p.second == true && p.first == odd_edge_loop);
               });
 
           if (finder != cutset.cend()) {
@@ -847,10 +897,11 @@ bool Algorithm<Graph, RndGenerator>::find_best_local_solution_inTree_heristic(
           }
         });
 
-    bool better_found = false;
+    // Try all possibile swap to solve the cycle.
+    bool new_inserted = false;
     for (const auto& e : cand_edges_to_swap) {
       // Apply transformation in order to try to remove the cycle.
-      sp_copy.perform_transformation(graph, local_edge, e);
+      sp_copy.perform_transformation(graph, odd_edge_loop, e);
 
       // Solve the problem for the new tree
       solve_problem_for_a_tree(graph,
@@ -872,17 +923,25 @@ bool Algorithm<Graph, RndGenerator>::find_best_local_solution_inTree_heristic(
             local_solution.m_mapped_sp_based);
 
         // Set the transformation as better so far
-        *out_transformation = std::make_pair(local_edge, e);
+        local_transformation = std::make_pair(odd_edge_loop, e);
+        new_inserted = true;
 
+        // Set return flag
         better_found = true;
       }
 
       // Reverse the transformation
-      sp_copy.perform_transformation(graph, e, local_edge);
+      sp_copy.perform_transformation(graph, e, odd_edge_loop);
     }
-    return better_found;
+
+    if (new_inserted == true) {
+      sp_copy.perform_transformation(graph, local_transformation.first,
+                                     local_transformation.second);
+      out_transformations->push_back(std::move(local_transformation));
+    }
   }
-  return false;
+
+  return better_found;
 }
 
 
