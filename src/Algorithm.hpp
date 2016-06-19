@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <limits>
 #include <queue>
+#include <functional>
 #include <ostream>
 #include <utility>
 #include <chrono>
@@ -86,6 +87,8 @@ class Algorithm {
 
   void best_local_aoc_solution(const Graph& graph, Solution* out_solution);
 
+  void best_local_moe_solution(const Graph& graph, Solution* out_solution);
+
   /// @brief Sets the seed for the random engine.
   void set_seed(int seed);
 
@@ -102,10 +105,10 @@ class Algorithm {
   /// @param cutset_output               The result.
   ///
   /// @note Complexity should be O(|V| + |E|).
-  static void fundamental_cutset(const Graph& graph,
-                                 const SpanningTreeT& spanning_tree,
-                                 const EdgeType& edge_of_spanning_tree,
-                                 EdgeFilter* cutset_output);
+  static size_t fundamental_cutset(const Graph& graph,
+                                   const SpanningTreeT& spanning_tree,
+                                   const EdgeType& edge_of_spanning_tree,
+                                   EdgeFilter* cutset_output);
 
  private:
   struct InstanceSolution {
@@ -130,6 +133,9 @@ class Algorithm {
   static size_t find_all_odd_cotree_edges(const Graph& graph,
                                           const MapAssignment& mapped_sp_based,
                                           EdgeFilter* odd_edges);
+
+  static size_t num_odd_cotree_edges_in_subset(const EdgeFilter& all_odd_edges,
+                                               const EdgeFilter& subset);
 
   static bool is_odd_cotree_edge(const Graph& graph,
                                  const MapAssignment& mapped_sp_based,
@@ -186,21 +192,29 @@ class Algorithm {
       InstanceSolution* out,
       std::vector< EdgeTransformation >* out_transformations);
 
+  static bool find_best_local_solution_inTree_moe(
+      const Graph& graph,
+      const SpanningTreeT& st,
+      InstanceSolution* out,
+      EdgeTransformation* out_transformation);
+
   /// @brief Cycle detection algorithm for UNDIRECTED GRAPH!
   ///
-  /// @param [in] graph          An undirected graph. VertexType must to be
-  ///                            an integer type.
-  /// @param [in] num_vertices   The number of vertices in the graph.
-  /// @param [out] edge_in_cycle An EdgeDescriptor which will be an
-  ///                            edge in the cycle.
+  /// @param [in] graph           An undirected graph. VertexType must to be
+  ///                             an integer type.
+  /// @param [in] num_vertices    The number of vertices in the graph.
+  /// @param [out] edges_in_cycle EdgeDescriptors which will be
+  ///                             edges in the cycle in different cycles.
   ///
-  /// @return true whether there is a cycle in the graph.
   /// @note The output parameter will be modified even if the result will
   /// be false. In that case the value will be no sense.
+  /// @note It's not necessary to clear the output vector. The function will be
+  /// that.
   template<typename GenericGraph, typename EdgeDescriptor>
-  static void some_cycles_detection(const GenericGraph& graph,
-                                    const size_t num_vertices,
-                                    std::vector<EdgeDescriptor>* edge_in_cycle);
+  static void some_cycles_detection(
+      const GenericGraph& graph,
+      const size_t num_vertices,
+      std::vector<EdgeDescriptor>* edges_in_cycle);
 };
 
 template<typename Graph, typename RndGenerator>
@@ -291,12 +305,60 @@ void Algorithm<Graph, RndGenerator>::best_local_search_solution(
 }
 
 template<typename Graph, typename RndGenerator>
-void Algorithm<Graph, RndGenerator>::best_local_aoc_solution(
+void Algorithm<Graph, RndGenerator>::best_local_moe_solution(
     const Graph& graph, Solution* out_solution) {
   assert(out_solution != nullptr);
 
   // Function setting
   static constexpr size_t NUMBER_OF_TREE_TO_GENERATE = 100;
+
+  // Local variables
+  SpanningTreeT rnd_spanning_tree;
+  InstanceSolution local_solution;
+  EdgeTransformation local_transformation;
+  out_solution->m_size_solution = std::numeric_limits<size_t>::max();
+
+  auto time_start = std::chrono::steady_clock::now();
+
+  for (size_t i = 0; i < NUMBER_OF_TREE_TO_GENERATE; ++i) {
+    // Generate a rnd spanning tree
+    rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
+
+    // Rafine the tree at the best you can
+    while (find_best_local_solution_inTree_moe(graph, rnd_spanning_tree,
+                                               &local_solution,
+                                               &local_transformation) == true) {
+      rnd_spanning_tree.perform_transformation(graph,
+                                               local_transformation.first,
+                                               local_transformation.second);
+      if (local_solution.m_size_solution < out_solution->m_size_solution) {
+        out_solution->m_size_solution = local_solution.m_size_solution;
+        out_solution->m_assignment = std::move(local_solution.m_assignment);
+        out_solution->m_number_odd_edges = local_solution.m_num_odd_edges;
+        }
+    }
+
+    if (local_solution.m_size_solution < out_solution->m_size_solution) {
+      out_solution->m_size_solution = local_solution.m_size_solution;
+      out_solution->m_assignment = std::move(local_solution.m_assignment);
+      out_solution->m_number_odd_edges = local_solution.m_num_odd_edges;
+    }
+  }
+
+  auto time_stop = std::chrono::steady_clock::now();
+  // Assign the time elapsed
+  out_solution->m_time_for_solution =
+      std::chrono::duration_cast<std::chrono::milliseconds>(time_stop -
+                                                            time_start);  
+}
+
+template<typename Graph, typename RndGenerator>
+void Algorithm<Graph, RndGenerator>::best_local_aoc_solution(
+    const Graph& graph, Solution* out_solution) {
+  assert(out_solution != nullptr);
+
+  // Function setting
+  static constexpr size_t NUMBER_OF_TREE_TO_GENERATE = 50;
 
   // Local variables
   SpanningTreeT rnd_spanning_tree;
@@ -481,7 +543,7 @@ void Algorithm<Graph, RndGenerator>::print_solution(
 }
 
 template<typename Graph, typename RndGenerator>
-void Algorithm<Graph, RndGenerator>::fundamental_cutset(
+size_t Algorithm<Graph, RndGenerator>::fundamental_cutset(
     const Graph& graph, const SpanningTreeT& spanning_tree,
     const EdgeType& edge_of_spanning_tree, EdgeFilter* cutset_output) {
   assert(cutset_output != nullptr);
@@ -565,11 +627,13 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
     openlist.pop();
   }
 
+  size_t num_in_cutset = 0;
+
   // Cut assignment
   const auto edges_graph = edges(graph);
   std::for_each(edges_graph.first,
                 edges_graph.second,
-                [&edges_in_cutset, &color_map, &graph]
+                [&edges_in_cutset, &color_map, &graph, &num_in_cutset]
                 (const EdgeType& e) {
                   const auto source = boost::source(e, graph);
                   const auto target = boost::target(e, graph);
@@ -577,10 +641,13 @@ void Algorithm<Graph, RndGenerator>::fundamental_cutset(
                   const auto color_t = get(color_map, target);
                   if (color_s != color_t) {
                     edges_in_cutset[e] = true;
+                    ++num_in_cutset;
                   } else {
                     edges_in_cutset[e]= false;
                   }
                 });
+
+  return num_in_cutset;
 }
 
 template<typename Graph, typename RndGenerator>
@@ -942,6 +1009,108 @@ bool Algorithm<Graph, RndGenerator>::find_best_local_solution_inTree_aoc(
   }
 
   return better_found;
+}
+
+template<typename Graph, typename RndGenerator>
+bool Algorithm<Graph, RndGenerator>::find_best_local_solution_inTree_moe(
+    const Graph& graph,
+    const SpanningTreeT& st,
+    InstanceSolution* out,
+    EdgeTransformation* out_transformation) {
+  assert(out != nullptr);
+  assert(out_transformation != nullptr);
+
+  // Local variables
+  EdgeFilter cutset;
+  SpanningTreeT sp_copy = st;
+  InstanceSolution local_solution;
+  std::multimap<size_t,
+                std::pair<EdgeType, EdgeFilter>,
+                std::greater<size_t>> local_edges;
+
+  // Find the initial solution
+  solve_problem_for_a_tree(graph, st, out);
+
+  // Odd edges
+  const auto& odd_cotree_edges = out->m_odd_edges;
+
+  // View on spanning tree
+  const auto&& sp_graph =
+      FilteredGraph(graph,
+                    PredicateFilterEdge(st.get_edges_in_spanning_tree()));
+
+  // For each edge in the spanning tree
+  const auto& all_edges = edges(sp_graph);
+  std::for_each(
+      all_edges.first, all_edges.second,
+      [&] (const EdgeType& e_sp) {
+        // Compute the fundamental cutset
+        fundamental_cutset(graph, st, e_sp, &cutset);
+
+        // Number of odd edges in cutset
+        auto n_odd_in_cutset = 0;
+        std::for_each(
+            cutset.cbegin(), cutset.cend(),
+            [&] (const typename EdgeFilter::value_type& pe_cuset) {
+              if (pe_cuset.second == true &&
+                  odd_cotree_edges.at(pe_cuset.first) == true &&
+                  pe_cuset.first != e_sp) {
+                ++n_odd_in_cutset;
+              }
+            });
+
+        // Insert it in the vector
+        local_edges.emplace(n_odd_in_cutset,
+                            std::make_pair(e_sp, std::move(cutset)));
+      });
+
+  if (local_edges.size() == 0) return false;
+
+  // Get the best edge to swap
+  const auto& best_it = *(local_edges.cbegin());
+  const auto& e_to_swap = best_it.second.first;
+  const auto& this_cutset = best_it.second.second;
+  bool found_better = false;
+
+  for (const auto& e : this_cutset) {
+    const auto& ecut = e.first;
+    if (e.second == true &&
+        odd_cotree_edges.at(ecut) == true &&
+        ecut != e_to_swap) {
+      // Perform the transformation
+      sp_copy.perform_transformation(graph, ecut, e_to_swap);
+
+      // Solve the problem for the new tree
+      solve_problem_for_a_tree(graph, sp_copy, &local_solution);
+
+      // Check whether the new solution is better
+      if (local_solution.m_size_solution <
+          out->m_size_solution) {
+        // Set the new solution
+        out->m_size_solution =
+            local_solution.m_size_solution;
+        out->m_assignment = std::move(
+            local_solution.m_assignment);
+        out->m_odd_edges = std::move(
+            local_solution.m_odd_edges);
+        out->m_num_odd_edges =
+            local_solution.m_num_odd_edges;
+        out->m_mapped_sp_based = std::move(
+            local_solution.m_mapped_sp_based);
+
+        // Set the transformation as better so far
+        *out_transformation = std::make_pair(ecut, e_to_swap);
+
+        // Change the flag result
+        found_better = true;
+      }
+
+      // Reverse the transformation
+      sp_copy.perform_transformation(graph, e_to_swap, ecut);
+    }
+  }
+
+  return found_better;
 }
 
 
