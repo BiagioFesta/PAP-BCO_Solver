@@ -221,6 +221,8 @@ void SpanningTree<Graph>::perform_transformation(
     const EdgeType& edge_to_remove) {
 #ifdef _DEBUG
   // Check condition od edge
+  assert(m_edges_filter.find(edge_to_remove) != m_edges_filter.cend());
+  assert(m_edges_filter.find(edge_to_add) != m_edges_filter.cend());
   assert(m_edges_filter.at(edge_to_remove) == true);
   assert(m_edges_filter.at(edge_to_add) == false);
 #endif
