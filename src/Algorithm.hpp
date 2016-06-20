@@ -349,7 +349,7 @@ void Algorithm<Graph, RndGenerator>::best_local_moe_solution(
   // Assign the time elapsed
   out_solution->m_time_for_solution =
       std::chrono::duration_cast<std::chrono::milliseconds>(time_stop -
-                                                            time_start);  
+                                                            time_start);
 }
 
 template<typename Graph, typename RndGenerator>
@@ -358,12 +358,13 @@ void Algorithm<Graph, RndGenerator>::best_local_aoc_solution(
   assert(out_solution != nullptr);
 
   // Function setting
-  static constexpr size_t NUMBER_OF_TREE_TO_GENERATE = 50;
+  static constexpr size_t NUMBER_OF_TREE_TO_GENERATE = 100;
 
   // Local variables
   SpanningTreeT rnd_spanning_tree;
   InstanceSolution local_solution;
   std::vector<EdgeTransformation> local_transformations;
+  EdgeTransformation local_transformation;
   local_transformations.reserve(boost::num_vertices(graph));
   out_solution->m_size_solution = std::numeric_limits<size_t>::max();
 
@@ -374,9 +375,12 @@ void Algorithm<Graph, RndGenerator>::best_local_aoc_solution(
     rnd_spanning_tree.generate_rnd_spanning_tree(graph, &m_rnd_engine);
 
     // Rafine the tree at the best you can
+    bool no_cycles = true;
     while (find_best_local_solution_inTree_aoc(
                graph, rnd_spanning_tree,
                &local_solution, &local_transformations) == true) {
+      no_cycles = false;
+
       for (const auto& transf : local_transformations) {
         rnd_spanning_tree.perform_transformation(graph,
                                                  transf.first,
@@ -387,9 +391,31 @@ void Algorithm<Graph, RndGenerator>::best_local_aoc_solution(
         out_solution->m_size_solution = local_solution.m_size_solution;
         out_solution->m_assignment = std::move(local_solution.m_assignment);
         out_solution->m_number_odd_edges = local_solution.m_num_odd_edges;
-      }      
+      }
     }
 
+    if (no_cycles == true) {
+      std::default_random_engine engine(std::time(nullptr));
+      std::uniform_real_distribution<float> rnd_prob;
+
+      while (rnd_prob(engine) < 0.5f &&
+             find_best_local_solution_inTree_moe(
+                 graph, rnd_spanning_tree,
+                 &local_solution, &local_transformation)) {
+        rnd_spanning_tree.perform_transformation(graph,
+                                                 local_transformation.first,
+                                                 local_transformation.second);
+
+        if (local_solution.m_size_solution <
+            out_solution->m_size_solution) {
+          out_solution->m_size_solution = local_solution.m_size_solution;
+          out_solution->m_assignment = std::move(local_solution.m_assignment);
+          out_solution->m_number_odd_edges = local_solution.m_num_odd_edges;
+        }
+      }
+    }
+    
+    
     if (local_solution.m_size_solution < out_solution->m_size_solution) {
       out_solution->m_size_solution = local_solution.m_size_solution;
       out_solution->m_assignment = std::move(local_solution.m_assignment);
