@@ -186,7 +186,7 @@ void SpanningTree<Graph>::print(const Graph& graph, std::ostream* os) const {
                 (const EdgeType& e) {
                   const auto t = target(e, tree_filter);
                   const auto s = source(e, tree_filter);
-                  std::cout << "(" << s << ") <---> (" << t << ")\n";
+                  *os << "(" << s << ") <---> (" << t << ")\n";
                 });
 }
 
