@@ -21,6 +21,7 @@
 #define __PAP_BCO_PARSER__GRAPH_UTILITY__HPP
 
 #include <queue>
+#include <vector>
 #include <boost/graph/two_bit_color_map.hpp>
 
 namespace pap_solver {
@@ -29,7 +30,63 @@ class GraphUtility {
  public:
   template<typename Graph>
   static bool graph_contains_loop(const Graph& graph);
+
+  /// @brief Prints the graph pass as an adjacency matrix.
+  ///
+  /// @param [in] graph        The matrix you want to print on the stream.
+  /// @param [out] out_stream  The output stream where to print the adjancency
+  ///                          matrix.
+  /// @param [in] header       'True' if you want to print the header
+  ///                          which display the num of vertices and edges.
+  /// @param separator         The seprator character.
+  ///
+  template<typename Graph>
+  static void printGraph_as_adjacencyMatrix(const Graph& graph,
+                                            std::ostream* out_stream,
+                                            bool header = false,
+                                            char separator = ',');
 };
+
+template<typename Graph>
+void GraphUtility::printGraph_as_adjacencyMatrix(const Graph& graph,
+                                                 std::ostream* out_stream,
+                                                 bool header,
+                                                 char separator) {
+  assert(out_stream != nullptr);
+
+  // Some type definitions
+  typedef typename Graph::vertex_descriptor VertexType;
+  typedef typename Graph::edge_descriptor EdgeType;
+
+  // Const definition and local variables
+  const auto num_vertices = boost::num_vertices(graph);
+  const auto num_edges = boost::num_edges(graph);
+  auto& os = *out_stream;
+
+  // Print header if specified in parameters
+  if (header) {
+    os << num_vertices << ',' << num_edges << '\n';
+  }
+
+  // Loop on all vertices O(|V|)
+  for (size_t i = 0; i < num_vertices; ++i) {
+    auto adj_vertices = boost::adjacent_vertices(i, graph);
+    std::vector<char> row_adj_vertex(num_vertices, '0');
+
+    // Loop on all adjacent vertices of i-th vertex
+    std::for_each(
+        adj_vertices.first, adj_vertices.second,
+        [&] (const VertexType& adj_v) {
+          row_adj_vertex[adj_v] = '1';
+        });
+
+    // Print the row vector on the output stream
+    size_t col = 0;
+    for (const auto& c : row_adj_vertex) {
+      os << c << (++col < num_vertices ? separator : '\n');
+    }
+  }
+}
 
 template<typename Graph>
 bool GraphUtility::graph_contains_loop(const Graph& graph) {

@@ -22,6 +22,7 @@
 
 #include <random>
 #include "Algorithm.hpp"
+#include "GraphUtility.hpp"
 
 namespace pap_solver {
 
@@ -75,6 +76,15 @@ void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
       solution.m_time_for_solution.count() << " ms\n";
   *os << "--------------------------------------------\n";
   assert(check_solution(graph, solution) == true);
+
+  std::ofstream file_spanning("spanning_tree.csv", std::ios_base::out);
+  GraphUtility::printGraph_as_adjacencyMatrix(
+      solution.m_spanning_tree.get_filtered_graph(graph),
+      &file_spanning);
+  file_spanning.close();
+  std::ofstream file_matrix("graph.csv", std::ios_base::out);
+  GraphUtility::printGraph_as_adjacencyMatrix(graph, &file_matrix);
+  file_matrix.close();
 }
 
 template<typename Graph>
