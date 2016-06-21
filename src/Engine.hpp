@@ -29,7 +29,7 @@ namespace pap_solver {
 template<typename Graph>
 class Engine {
  public:
-  typedef std::default_random_engine RndGenerator;
+  typedef std::mt19937 RndGenerator;
   typedef Algorithm<Graph, RndGenerator> AlgorithmDefault;
   typedef typename AlgorithmDefault::Solution Solution;
 
