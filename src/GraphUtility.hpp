@@ -21,7 +21,9 @@
 #define __PAP_BCO_PARSER__GRAPH_UTILITY__HPP
 
 #include <queue>
+#include <stack>
 #include <vector>
+#include <utility>
 #include <istream>
 #include <ostream>
 #include <boost/graph/random.hpp>
@@ -370,46 +372,61 @@ bool GraphUtility::graph_contains_loop(const Graph& graph) {
   // Type definitions
   typedef typename Graph::vertex_descriptor VertexType;
   typedef typename Graph::edge_descriptor EdgeType;
-  typedef boost::two_bit_color_map<> color_map_t;
-  typedef std::queue<VertexType> open_list_t;
+  typedef std::stack<std::pair<VertexType, VertexType>> OpenList;
+  typedef std::vector<bool> ClosedList;
 
-  // Color definitions
-  static const auto white_t =  boost::color_traits<
-    boost::two_bit_color_type>::white();
-  static const auto black_t =  boost::color_traits<
-    boost::two_bit_color_type>::black();
-  static const auto gray_t =  boost::color_traits<
-    boost::two_bit_color_type>::gray();
-
+  // Some local variables
+  size_t num_node_explored = 0;
   const auto num_vertices = boost::num_vertices(graph);
-  color_map_t color_map(num_vertices);
+  if (num_vertices == 0) return false;
 
-  open_list_t openlist;
-  const auto root = *(vertices(graph).first);
-  openlist.push(root);
-  put(color_map, root, black_t);
+  // Closed List inizialization
+  ClosedList closedList(num_vertices, false);
 
-  while (openlist.empty() == false) {
-    const auto& node = openlist.front();
-    auto this_node_color = get(color_map, node);
-    auto edges_list = out_edges(node, graph);
-    for (auto i = edges_list.first;
-         i != edges_list.second;
-         ++i) {
-      auto target = boost::target(*i, graph);
-      auto color_adjacent = get(color_map, target);
-      if (color_adjacent == white_t) {
-        if (this_node_color == black_t)
-          put(color_map, target, gray_t);
-        else
-          put(color_map, target, black_t);
-        openlist.push(target);
-      } else if (color_adjacent == this_node_color) {
-        return true;
-      }
+  // Open List inizialization
+  OpenList openList;
+  const auto p_firstVertex = boost::vertices(graph).first;
+  const auto p_nullVertex = boost::vertices(graph).second;
+  openList.push(std::make_pair(*p_firstVertex, *p_nullVertex));
+  closedList[*p_firstVertex] = true;
+  ++num_node_explored;
+
+  while (openList.empty() == false) {
+    // Pop the next node
+    const auto current_element = openList.top();
+    const auto& current_node = current_element.first;
+    const auto& current_parent = current_element.second;
+    openList.pop();
+
+    // Explore all adjacent vertices
+    const auto adj_vertices = boost::adjacent_vertices(current_node, graph);
+
+    // Look for a back vertices which is not the parent
+    const auto finder = std::find_if(
+        adj_vertices.first, adj_vertices.second,
+        [&] (const VertexType& a_v) {
+          if (closedList[a_v] == true) {
+            if (a_v != current_parent) {
+              // Found a back edge. A cycle is here!
+              return true;
+            }
+          } else {
+            openList.push(std::make_pair(a_v, current_node));
+            closedList[a_v] = true;
+            ++num_node_explored;
+          }
+          return false;
+        });
+
+    if (finder != adj_vertices.second) {
+      return true;
     }
-    openlist.pop();
-  }
+  }  // while openList is not empty
+
+  // Assertion all nodes are explored. In case the graph is disconnected
+  assert(num_node_explored == num_vertices);
+
+  // No cycle found!
   return false;
 }
 
