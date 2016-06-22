@@ -45,7 +45,118 @@ class GraphUtility {
                                             std::ostream* out_stream,
                                             bool header = false,
                                             char separator = ',');
+
+  /// @brief A Vertex filter.
+  typedef std::vector<bool> VertexFilter;
+
+  /// @brief Discovers all disjointed graph (subgraph) in the graph passed
+  ///        as paramter.
+  /// @param [in] graph             The main graph which could contains
+  ///                               disjointed sub graphs.
+  /// @param [out] dis_graphs       A vector of vertex filter. Each vertex
+  ///                               filter represents a map which says
+  ///                               whether a vertex is present or not.
+  /// @param [in] unitary_subgraph  If true even unitary node will be
+  ///                               considered as sub graphs.
+  /// @note It's recommended to avoid unitary_subgraph because of perfomance
+  ///       reasons. Less memory will be used.
+  /// @note The complexity should be O(|V|).
+  template<typename Graph>
+  static void find_all_disjointed_graph(
+      const Graph& graph,
+      std::vector<VertexFilter>* dis_graphs,
+      bool unitary_subgraph = false);
 };
+
+template<typename Graph>
+void GraphUtility::find_all_disjointed_graph(
+    const Graph& graph,
+    std::vector<VertexFilter>* dis_graphs,
+    bool unitary_subgraph) {
+  assert(dis_graphs != nullptr);
+
+  // Some type definitions
+  typedef typename Graph::vertex_descriptor VertexType;
+  typedef std::queue<VertexType> OpenList;
+  typedef std::vector<bool> ClosedList;
+
+  // Some local variable
+  const auto num_vertices = boost::num_vertices(graph);
+  VertexFilter* current_filter = nullptr;
+
+  // Clean the output
+  dis_graphs->clear();
+
+  // Initialize the closed list. All vertices are unexplored
+  ClosedList closedList(num_vertices, false);
+  size_t explored_node = 0;
+
+  // Inizialize the open list. Insert the first vertex
+  OpenList openList;
+  const auto first_vertex = boost::vertices(graph).first;
+  openList.push(*first_vertex);
+
+  while (explored_node < num_vertices) {
+    // Check if the open list is empty. In that case find another node
+    if (openList.empty() == true) {
+      // Force next iteration to create a new filter
+      current_filter = nullptr;
+
+      const auto all_vertices = boost::vertices(graph);
+      const auto finder = std::find_if(
+          all_vertices.first, all_vertices.second,
+          [&] (const VertexType& v) {
+            return (closedList[v] == false);
+          });
+
+      // There must to be another vertex to explore
+      assert(finder != all_vertices.second);
+
+      // Insert this new node in the openlist
+      openList.push(*finder);
+    }
+
+    while (openList.empty() == false) {
+      // Get the first vertex in the open list and remove from it
+      const auto current_vertex = openList.front();
+      openList.pop();
+
+      // Check if the current vertex is a isolated node.
+      // In that case, and the option for unitary graph is disabled
+      // then you can skip that node
+      if (unitary_subgraph == true ||
+          boost::out_degree(current_vertex, graph) > 0) {
+        // If the current filter is null, create a new one and
+        // use it
+        if (current_filter == nullptr) {
+          dis_graphs->emplace_back(num_vertices, false);
+          current_filter = &(dis_graphs->back());
+        }
+
+        // Add the current vertex to the current filter
+        (*current_filter)[current_vertex] = true;
+
+        // Add it to the closed list
+        closedList[current_vertex] = true;
+        ++explored_node;
+
+        // Get all adjacent vertices from the current vertex
+        const auto adj_vertices = boost::adjacent_vertices(current_vertex,
+                                                           graph);
+
+        // Add all adjacent vertices to the open list
+        std::for_each(
+            adj_vertices.first, adj_vertices.second,
+            [&] (const VertexType& a_v) {
+              // Check the vertex is not in the closed list
+              if (closedList[a_v] == false) {
+                openList.push(a_v);
+              }
+            });
+      }
+    }  // end while on openList
+  }  // end while on all vertices explored
+}
 
 template<typename Graph>
 void GraphUtility::printGraph_as_adjacencyMatrix(const Graph& graph,
