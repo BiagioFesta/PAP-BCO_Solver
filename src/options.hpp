@@ -27,7 +27,6 @@ namespace pap_solver {
 
 struct ProgramOptions {
   std::string input_filename;
-  bool compressed_matrix = false;
   bool display_help = false;
   bool generate_random_graph = false;
   size_t generate_num_vertices = 0;

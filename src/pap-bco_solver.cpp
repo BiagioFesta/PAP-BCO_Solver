@@ -51,7 +51,6 @@ PAP_BCO_Solver::PAP_BCO_Solver() noexcept {
 
 int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
   static struct option long_options[] = {
-    {"compressed", no_argument, 0, 'c'},
     {"help", no_argument, 0, 'h'},
     {"generate", required_argument, 0, 'g'},
     {"seed", required_argument, 0, 's'},
@@ -60,12 +59,9 @@ int PAP_BCO_Solver::parse_cmdline_options(int argc, char* argv[]) {
   int option_index;
   while (true) {
     option_index = 0;
-    auto c = getopt_long(argc, argv, "s:g:hc", long_options, &option_index);
+    auto c = getopt_long(argc, argv, "s:g:h", long_options, &option_index);
     if (c == -1) break;
     switch (c) {
-      case 'c':
-        m_options.compressed_matrix = true;
-        break;
       case 'h':
         m_options.display_help = true;
         break;
@@ -172,8 +168,6 @@ FILENAME                       It's the input (or output if --generate option ha
                                specified) of the adjacency matrix.
                                If it's not specified then the matrix will be read from
                                the std input (or generated to the std output).
-
--c, --compresed                Specify whether the input matrix is a compressed format or not.
 
 -g NVERTICES:NEDGES,
 --generate NVERTICES:NEDGES    Generate a valid random graph  with NVERTICES and NEDGES.
