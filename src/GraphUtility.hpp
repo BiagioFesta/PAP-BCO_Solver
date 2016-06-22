@@ -22,6 +22,12 @@
 
 #include <queue>
 #include <vector>
+#include <istream>
+#include <ostream>
+#include <boost/graph/random.hpp>
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
+#include <boost/graph/adj_list_serialize.hpp>
 #include <boost/graph/two_bit_color_map.hpp>
 
 namespace pap_solver {
@@ -70,7 +76,122 @@ class GraphUtility {
   static bool check_all_disjointed(
       const std::vector<VertexFilter>& dis_graphs,
       const size_t total_num_vertices) noexcept;
+
+  /// @brief Generate a random graph. Usefull for test purpose.
+  ///
+  /// @param [in] num_vertices   The number of vertices you want in the graph.
+  /// @param [in] num_edges      The number of edges you want in the graph.
+  /// @param [out] output_graph  The output graph.
+  /// @param [in,out] rnd_engine A random engine.
+  ///
+  /// @note Actually the number of of the output graph edges may be different
+  /// that what specified in the parameter. That because additional edges
+  /// will be added in order to fix a disconnected graph.
+  template<typename Graph, typename RndEngine>
+  static void generate_random_graph(const size_t num_vertices,
+                                    const size_t num_edges,
+                                    Graph* output_graph,
+                                    RndEngine* rnd_engine);
+
+  template<typename Graph>
+  static void printGraph_asArchive(const Graph& graph,
+                                   std::ostream* out_stream);
+
+  template<typename Graph>
+  static void readGraph_asArchive(std::istream* in_stream, Graph* graph);
 };
+
+template<typename Graph>
+void GraphUtility::printGraph_asArchive(const Graph& graph,
+                                        std::ostream* out_stream) {
+  assert(out_stream != nullptr);
+
+  boost::archive::text_oarchive archive(*out_stream);
+  archive << graph;
+}
+
+template<typename Graph>
+void GraphUtility::readGraph_asArchive(std::istream* in_stream,
+                                       Graph* graph) {
+  assert(in_stream != nullptr);
+  assert(graph != nullptr);
+
+  boost::archive::text_iarchive archive(*in_stream);
+  archive >> *graph;
+}
+
+template<typename Graph, typename RndEngine>
+void GraphUtility::generate_random_graph(const size_t num_vertices,
+                                         const size_t num_edges,
+                                         Graph* output_graph,
+                                         RndEngine* rnd_engine) {
+  assert(output_graph != nullptr);
+  assert(rnd_engine != nullptr);
+
+  static_assert(std::is_integral<typename Graph::vertex_descriptor>::value,
+                "The vertex type (descriptor) must to be a integer type!");
+
+  // Some local variables
+  std::vector<VertexFilter> sub_graphs;
+
+  // Clean the output
+  output_graph->clear();
+
+  // Generate the random graph
+  boost::generate_random_graph(*output_graph, num_vertices, num_edges,
+                               *rnd_engine, false);
+
+  // The graph could be disjointed, check that
+  find_all_disjointed_graph(*output_graph, &sub_graphs, true);
+
+  // While there are disjointed graph
+  size_t num_sub_graphs;
+  while ((num_sub_graphs = sub_graphs.size()) > 1) {
+    // Pick two of those (rndly) graph and join them
+    std::uniform_int_distribution<int> rnd_sub_graph(0, num_sub_graphs - 1);
+
+    // TODO(biagio): no efficient solution to generate different numbers
+    auto index1 = rnd_sub_graph(*rnd_engine);
+    decltype(index1) index2;
+    while ((index2 = rnd_sub_graph(*rnd_engine)) == index1) { }
+
+    // Get those two graph
+    const auto& graph1 = sub_graphs[index1];
+    const auto& graph2 = sub_graphs[index2];
+
+    // Pick two different vertices
+    int vertex1 = -1;
+    int vertex2 = -1;
+    for (size_t i = 0;
+         i < num_vertices && (vertex1 == -1 || vertex2 == -1);
+         ++i) {
+      if (vertex1 == -1 && graph1[i] == true) {
+        vertex1 = i;
+      }
+      if (vertex2 == -1 &&  graph2[i] == true) {
+        vertex2 = i;
+      }
+    }  // for
+    assert(vertex1 != vertex2);
+    assert(graph1[vertex1] == true);
+    assert(graph2[vertex2] == true);
+
+    // Connect those two vertices
+    boost::add_edge(vertex1, vertex2, *output_graph);
+
+    // Erase one of those graph
+    sub_graphs.erase(sub_graphs.cbegin() + index2);
+
+    // TODO(biagio): l'algoritmo non è proprio ottimale.
+    // Innanzittutto i vertici sono selezionati come i primi che trova mentre
+    // potrebbero essere pickati randomicamente
+    // Inoltre dovresti aggiornare il subgrafo1 mettendo a true
+    // i nuovi vertici importati ora da subgraph2.
+    // Non mettendoli, come in questo caso, alla prossima iterazione
+    // i vertici di graph2 (ora in graph1) non vengono visti e quindi
+    // non selezionabili.
+  }  // end while
+}
 
 bool GraphUtility::check_all_disjointed(
     const std::vector<VertexFilter>& dis_graphs,
@@ -132,6 +253,8 @@ void GraphUtility::find_all_disjointed_graph(
   OpenList openList;
   const auto first_vertex = boost::vertices(graph).first;
   openList.push(*first_vertex);
+  ++explored_node;
+  closedList[*first_vertex] = true;
 
   while (explored_node < num_vertices) {
     // Check if the open list is empty. In that case find another node
@@ -151,6 +274,8 @@ void GraphUtility::find_all_disjointed_graph(
 
       // Insert this new node in the openlist
       openList.push(*finder);
+      closedList[*finder] = true;
+      ++explored_node;
     }
 
     while (openList.empty() == false) {
@@ -162,7 +287,7 @@ void GraphUtility::find_all_disjointed_graph(
       // In that case, and the option for unitary graph is disabled
       // then you can skip that node
       if (unitary_subgraph == true ||
-          boost::out_degree(current_vertex, graph) > 0) {
+          (boost::out_degree(current_vertex, graph) > 0)) {
         // If the current filter is null, create a new one and
         // use it
         if (current_filter == nullptr) {
@@ -172,10 +297,6 @@ void GraphUtility::find_all_disjointed_graph(
 
         // Add the current vertex to the current filter
         (*current_filter)[current_vertex] = true;
-
-        // Add it to the closed list
-        closedList[current_vertex] = true;
-        ++explored_node;
 
         // Get all adjacent vertices from the current vertex
         const auto adj_vertices = boost::adjacent_vertices(current_vertex,
@@ -188,6 +309,10 @@ void GraphUtility::find_all_disjointed_graph(
               // Check the vertex is not in the closed list
               if (closedList[a_v] == false) {
                 openList.push(a_v);
+
+                // Add it to the closed list
+                closedList[a_v] = true;
+                ++explored_node;
               }
             });
       }

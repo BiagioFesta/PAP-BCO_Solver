@@ -25,7 +25,7 @@
 #include <boost/graph/adjacency_list.hpp>
 #include "options.hpp"
 #include "spanning_tree.hpp"
-#include "matrix_parser.hpp"
+#include "GraphUtility.hpp"
 
 namespace pap_solver {
 
@@ -74,12 +74,12 @@ void PAP_BCO_Solver::generate_random_matrix(RND* rnd_engine) const {
   }
 
   Graph local_graph;
-  MatrixParser::generate_random_graph(m_options.generate_num_vertices,
+  GraphUtility::generate_random_graph(m_options.generate_num_vertices,
                                       m_options.generate_num_edges,
                                       &local_graph,
                                       rnd_engine);
 
-  MatrixParser::print_graph_raw(local_graph, os);
+  GraphUtility::printGraph_asArchive(local_graph, os);
 
   if (m_options.input_filename.size() != 0) {
     file.close();

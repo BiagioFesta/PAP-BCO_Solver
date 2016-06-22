@@ -154,7 +154,7 @@ void PAP_BCO_Solver::parse_matrix() {
     is = &file;
   }
 
-  MatrixParser::read_graph_raw(is, &m_graph);
+  GraphUtility::readGraph_asArchive(is, &m_graph);
 
   if (file.is_open()) {
     file.close();
