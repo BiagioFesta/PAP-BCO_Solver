@@ -36,6 +36,11 @@ namespace pap_solver {
 
 class GraphUtility {
  public:
+  /// @brief Test whether the graph contains loop or not.
+  /// @param [in] graph   The graph you want to test.
+  ///
+  /// @return 'true' if the graph contins a loop.
+  /// @note The graph MUST TO BE connected and undirected.
   template<typename Graph>
   static bool graph_contains_loop(const Graph& graph);
 
