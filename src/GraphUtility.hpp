@@ -66,7 +66,44 @@ class GraphUtility {
       const Graph& graph,
       std::vector<VertexFilter>* dis_graphs,
       bool unitary_subgraph = false);
+
+  static bool check_all_disjointed(
+      const std::vector<VertexFilter>& dis_graphs,
+      const size_t total_num_vertices) noexcept;
 };
+
+bool GraphUtility::check_all_disjointed(
+    const std::vector<VertexFilter>& dis_graphs,
+    const size_t total_num_vertices) noexcept {
+  std::vector<int> vertex_in_graphID(total_num_vertices, -1);
+
+  size_t current_index_subgraph = 0;
+
+  // Cycle on all sub graphs
+  for (const auto& g : dis_graphs) {
+    size_t current_index_vertex = 0;
+
+    // Cycle on all vertices of this sub graph
+    for (const auto& v : g) {
+      if (v == true) {
+        auto& vertex_belogs = vertex_in_graphID[current_index_vertex];
+        if (vertex_belogs != -1) {
+          return false;
+        } else {
+          vertex_belogs = current_index_subgraph;
+        }
+      }
+
+      // Incremente the index of vertex
+      ++current_index_vertex;
+    }
+
+    // Increment the index of sub graph
+    ++current_index_subgraph;
+  }
+
+  return true;
+}
 
 template<typename Graph>
 void GraphUtility::find_all_disjointed_graph(
@@ -156,6 +193,10 @@ void GraphUtility::find_all_disjointed_graph(
       }
     }  // end while on openList
   }  // end while on all vertices explored
+
+  // Assertion on disjointed property
+  assert(GraphUtility::check_all_disjointed(
+      *dis_graphs, num_vertices) == true);
 }
 
 template<typename Graph>
