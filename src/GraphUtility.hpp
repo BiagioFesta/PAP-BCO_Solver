@@ -30,7 +30,6 @@
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/graph/adj_list_serialize.hpp>
-#include <boost/graph/two_bit_color_map.hpp>
 
 namespace pap_solver {
 
