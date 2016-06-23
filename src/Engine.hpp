@@ -61,7 +61,7 @@ void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
   }
 
   Solution solution;
-  algorithm.best_local_aoc_solution(graph, &solution);
+  algorithm.best_local_search_solution(graph, &solution);
 
   *os << "--------Spanning Tree Considered-----------\n";
   solution.m_spanning_tree.print(graph, os);
