@@ -35,10 +35,6 @@ class Engine {
 
   Engine() = default;
 
-  void find_a_solution(const Graph& graph,
-                       Solution* output_solution,
-                       int seed = -1);
-
   void find_a_solution_and_print(const Graph& graph,
                                  std::ostream* os,
                                  int seed = -1);
@@ -139,23 +135,6 @@ bool Engine<Graph>::check_solution(const Graph& graph,
   }
   return true;
 }
-template<typename Graph>
-void Engine<Graph>::find_a_solution(const Graph& graph,
-                                    Solution* output_solution,
-                                    int seed) {
-  AlgorithmDefault algorithm;
-  if (seed >= 0) {
-    algorithm.set_seed(seed);
-  } else {
-    algorithm.set_seed(
-        std::chrono::system_clock::now().time_since_epoch().count());
-  }
-
-  Solution& solution = *output_solution;
-  algorithm.solve(graph, &solution);
-  assert(check_solution(graph, solution) == true);
-}
-
 
 }  // namespace pap_solver
 
