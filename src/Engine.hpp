@@ -52,8 +52,14 @@ void Engine<Graph>::find_a_solution_and_print(const Graph& graph,
   if (seed >= 0) {
     algorithm.set_seed(seed);
   } else {
-    algorithm.set_seed(
-        std::chrono::system_clock::now().time_since_epoch().count());
+    try {
+      std::random_device random_seed;
+      algorithm.set_seed(random_seed());
+    } catch(const std::exception& err) {
+      std::cerr << err.what() << '\n';
+      algorithm.set_seed(
+          std::chrono::system_clock::now().time_since_epoch().count());
+    }
   }
 
   Solution solution;
